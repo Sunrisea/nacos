@@ -16,6 +16,9 @@
 
 package com.alibaba.nacos.api.config.remote.request;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * request to remove a config .
  *
@@ -26,6 +29,8 @@ public class ConfigRemoveRequest extends AbstractConfigRequest {
     
     String tag;
     
+    private Map<String, String> additionMap;
+    
     public ConfigRemoveRequest() {
     
     }
@@ -35,6 +40,29 @@ public class ConfigRemoveRequest extends AbstractConfigRequest {
         super.setGroup(group);
         super.setTenant(tenant);
         this.tag = tag;
+    }
+    
+    /**
+     * get additional param.
+     *
+     * @param key key of param.
+     * @return value of param ,return null if not exist.
+     */
+    public String getAdditionParam(String key) {
+        return additionMap == null ? null : additionMap.get(key);
+    }
+    
+    /**
+     * put additional param value. will override if exist.
+     *
+     * @param key   key of param.
+     * @param value value of param.
+     */
+    public void putAdditionalParam(String key, String value) {
+        if (additionMap == null) {
+            additionMap = new HashMap<>(2);
+        }
+        additionMap.put(key, value);
     }
     
     /**
@@ -53,6 +81,10 @@ public class ConfigRemoveRequest extends AbstractConfigRequest {
      */
     public void setTag(String tag) {
         this.tag = tag;
+    }
+    
+    public void setAdditionMap(Map<String, String> additionMap) {
+        this.additionMap = additionMap;
     }
     
 }

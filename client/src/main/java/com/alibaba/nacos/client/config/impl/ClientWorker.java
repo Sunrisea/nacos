@@ -123,6 +123,8 @@ public class ClientWorker implements Closeable {
     
     private static final String ENCRYPTED_DATA_KEY_PARAM = "encryptedDataKey";
     
+    private static final String SRC_USER = "src_user";
+    
     /**
      * groupKey -> cacheData.
      */
@@ -307,7 +309,11 @@ public class ClientWorker implements Closeable {
      * @throws NacosException exception to throw.
      */
     public boolean removeConfig(String dataId, String group, String tenant, String tag) throws NacosException {
-        return agent.removeConfig(dataId, group, tenant, tag);
+        return removeConfig(dataId, group, tenant, tag, null);
+    }
+    
+    public boolean removeConfig(String dataId, String group, String tenant, String tag, String srcUser) throws NacosException{
+        return agent.removeConfig(dataId, group, tenant, tag, srcUser);
     }
     
     /**
@@ -327,8 +333,13 @@ public class ClientWorker implements Closeable {
      */
     public boolean publishConfig(String dataId, String group, String tenant, String appName, String tag, String betaIps,
             String content, String encryptedDataKey, String casMd5, String type) throws NacosException {
+        return publishConfig(dataId, group, tenant, appName, tag, betaIps, content, encryptedDataKey, casMd5, type,null);
+    }
+    
+    public boolean publishConfig(String dataId, String group, String tenant, String appName, String tag, String betaIps,
+            String content, String encryptedDataKey, String casMd5, String type, String srcUser) throws NacosException {
         return agent.publishConfig(dataId, group, tenant, appName, tag, betaIps, content, encryptedDataKey, casMd5,
-                type);
+                type, srcUser);
     }
     
     /**
@@ -1250,7 +1261,13 @@ public class ClientWorker implements Closeable {
         
         @Override
         public boolean publishConfig(String dataId, String group, String tenant, String appName, String tag,
-                String betaIps, String content, String encryptedDataKey, String casMd5, String type)
+                                     String betaIps, String content, String encryptedDataKey, String casMd5, String type)
+                                     throws NacosException {
+            return publishConfig(dataId, group, tenant, appName, tag, betaIps, content, encryptedDataKey, casMd5, type, null);
+        }
+        
+        public boolean publishConfig(String dataId, String group, String tenant, String appName, String tag,
+                String betaIps, String content, String encryptedDataKey, String casMd5, String type, String srcUser)
                 throws NacosException {
             try {
                 ConfigPublishRequest request = new ConfigPublishRequest(dataId, group, tenant, content);
@@ -1260,6 +1277,7 @@ public class ClientWorker implements Closeable {
                 request.putAdditionalParam(BETAIPS_PARAM, betaIps);
                 request.putAdditionalParam(TYPE_PARAM, type);
                 request.putAdditionalParam(ENCRYPTED_DATA_KEY_PARAM, encryptedDataKey == null ? "" : encryptedDataKey);
+                request.putAdditionalParam(SRC_USER, srcUser);
                 ConfigPublishResponse response = (ConfigPublishResponse) requestProxy(getOneRunningClient(), request);
                 if (!response.isSuccess()) {
                     LOGGER.warn("[{}] [publish-single] fail, dataId={}, group={}, tenant={}, code={}, msg={}",
@@ -1279,7 +1297,12 @@ public class ClientWorker implements Closeable {
         
         @Override
         public boolean removeConfig(String dataId, String group, String tenant, String tag) throws NacosException {
+            return removeConfig(dataId, group, tenant, tag, null);
+        }
+        
+        public boolean removeConfig(String dataId, String group, String tenant, String tag, String srcUser) throws NacosException {
             ConfigRemoveRequest request = new ConfigRemoveRequest(dataId, group, tenant, tag);
+            request.putAdditionalParam(SRC_USER, srcUser);
             ConfigRemoveResponse response = (ConfigRemoveResponse) requestProxy(getOneRunningClient(), request);
             return response.isSuccess();
         }

@@ -219,13 +219,22 @@ public class NacosConfigService implements ConfigService {
     }
     
     private boolean removeConfigInner(String tenant, String dataId, String group, String tag) throws NacosException {
+        return removeConfigInner(tenant, dataId, group, tag, null);
+    }
+    
+    private boolean removeConfigInner(String tenant, String dataId, String group, String tag, String srcUser) throws NacosException {
         group = blank2defaultGroup(group);
         ParamUtils.checkKeyParam(dataId, group);
-        return worker.removeConfig(dataId, group, tenant, tag);
+        return worker.removeConfig(dataId, group, tenant, tag, srcUser);
     }
     
     private boolean publishConfigInner(String tenant, String dataId, String group, String tag, String appName,
             String betaIps, String content, String type, String casMd5) throws NacosException {
+        return publishConfigInner(tenant, dataId, group, tag, appName, betaIps, content, type, casMd5, null);
+    }
+    
+    private boolean publishConfigInner(String tenant, String dataId, String group, String tag, String appName,
+            String betaIps, String content, String type, String casMd5, String srcUser) throws NacosException {
         group = blank2defaultGroup(group);
         ParamUtils.checkParam(dataId, group, content);
         
@@ -240,7 +249,7 @@ public class NacosConfigService implements ConfigService {
         String encryptedDataKey = cr.getEncryptedDataKey();
         
         return worker
-                .publishConfig(dataId, group, tenant, appName, tag, betaIps, content, encryptedDataKey, casMd5, type);
+                .publishConfig(dataId, group, tenant, appName, tag, betaIps, content, encryptedDataKey, casMd5, type, srcUser);
     }
     
     @Override
