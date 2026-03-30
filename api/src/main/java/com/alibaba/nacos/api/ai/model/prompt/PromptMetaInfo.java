@@ -17,9 +17,7 @@
 package com.alibaba.nacos.api.ai.model.prompt;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Prompt meta information.
@@ -32,21 +30,11 @@ public class PromptMetaInfo extends PromptMetaSummary {
     
     private List<String> versions = new ArrayList<>();
     
-    private Map<String, String> labels = new HashMap<>();
-    
     public List<String> getVersions() {
         return versions;
     }
     
     public void setVersions(List<String> versions) {
         this.versions = versions;
-    }
-    
-    public Map<String, String> getLabels() {
-        return labels;
-    }
-    
-    public void setLabels(Map<String, String> labels) {
-        this.labels = labels;
     }
 }
