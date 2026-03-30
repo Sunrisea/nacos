@@ -25,6 +25,7 @@ import com.alibaba.nacos.ai.pipeline.model.PipelineExecutionStatus;
 import com.alibaba.nacos.ai.pipeline.model.PipelineNodeResult;
 import com.alibaba.nacos.ai.pipeline.repository.PipelineExecutionRepository;
 import com.alibaba.nacos.plugin.ai.pipeline.model.PublishPipelineContext;
+import com.alibaba.nacos.plugin.ai.pipeline.model.PublishPipelineResourceType;
 import com.alibaba.nacos.plugin.ai.pipeline.model.PublishPipelineResult;
 import com.alibaba.nacos.plugin.ai.pipeline.spi.PublishPipelineService;
 import org.slf4j.Logger;
@@ -64,7 +65,39 @@ public class PublishPipelineExecutor {
     }
     
     /**
-     * Asynchronously execute the pipeline.
+     * Check if pipeline is enabled and has matching services for the given resource type.
+     * This is a read-only check that does not create any records or side effects.
+     *
+     * @param resourceType the resource type to check
+     * @return true if pipeline is enabled and at least one matching service exists
+     */
+    public boolean isPipelineAvailable(PublishPipelineResourceType resourceType) {
+        PipelineConfig config = configProvider.getConfig();
+        if (!config.isEnabled()) {
+            return false;
+        }
+        List<PublishPipelineService> services = pipelineManager.getPipelineServices(resourceType, config.getNodes());
+        return !services.isEmpty();
+    }
+    
+    /**
+     * Asynchronously execute the pipeline. Delegates to
+     * {@link #execute(PublishPipelineContext, PipelineCallback, String)} with an auto-generated executionId.
+     *
+     * @param context  pipeline context containing resource metadata
+     * @param callback async callback, invoked exactly once when pipeline execution completes
+     * @return executionId, or null if pipeline is not enabled or no matching nodes
+     */
+    public String execute(PublishPipelineContext context, PipelineCallback callback) {
+        return execute(context, callback, UUID.randomUUID().toString());
+    }
+    
+    /**
+     * Asynchronously execute the pipeline with a caller-provided executionId.
+     *
+     * <p>Callers that need to write pipeline state (e.g. IN_PROGRESS pipelineInfo) BEFORE the async
+     * task starts should pre-generate an executionId, write the state, then call this method.
+     * This eliminates the race condition where the async callback overwrites caller-written state.</p>
      *
      * <ol>
      *   <li>Check config: if not enabled, return null (no record, no callback)</li>
@@ -74,11 +107,12 @@ public class PublishPipelineExecutor {
      *   <li>Submit async task to execute nodes serially, update state, and invoke callback</li>
      * </ol>
      *
-     * @param context  pipeline context containing resource metadata
-     * @param callback async callback, invoked exactly once when pipeline execution completes
+     * @param context     pipeline context containing resource metadata
+     * @param callback    async callback, invoked exactly once when pipeline execution completes
+     * @param executionId caller-provided execution identifier
      * @return executionId, or null if pipeline is not enabled or no matching nodes
      */
-    public String execute(PublishPipelineContext context, PipelineCallback callback) {
+    public String execute(PublishPipelineContext context, PipelineCallback callback, String executionId) {
         // Step 1: Check config
         PipelineConfig config = configProvider.getConfig();
         if (!config.isEnabled()) {
@@ -93,7 +127,6 @@ public class PublishPipelineExecutor {
         }
         
         // Step 3: Create execution record
-        String executionId = UUID.randomUUID().toString();
         long now = System.currentTimeMillis();
         
         PipelineExecution execution = new PipelineExecution();

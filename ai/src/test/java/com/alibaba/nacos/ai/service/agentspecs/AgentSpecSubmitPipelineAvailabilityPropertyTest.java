@@ -23,6 +23,7 @@ import com.alibaba.nacos.ai.pipeline.repository.PipelineExecutionRepository;
 import com.alibaba.nacos.ai.service.repository.AiResourcePersistService;
 import com.alibaba.nacos.ai.service.repository.AiResourceVersionPersistService;
 import com.alibaba.nacos.plugin.ai.pipeline.model.PublishPipelineContext;
+import com.alibaba.nacos.plugin.ai.pipeline.model.PublishPipelineResourceType;
 import com.alibaba.nacos.sys.env.EnvUtil;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
@@ -33,12 +34,15 @@ import net.jqwik.api.Provide;
 import org.mockito.ArgumentCaptor;
 import org.springframework.core.env.StandardEnvironment;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -81,18 +85,15 @@ class AgentSpecSubmitPipelineAvailabilityPropertyTest {
         when(aiResourcePersistService.find(eq(input.namespaceId), eq(input.name), eq(RESOURCE_TYPE_AGENTSPEC)))
                 .thenReturn(meta);
 
-        // Build version row as draft for submit's find(), then as reviewing for publish's find()
+        // Build version row as draft
         AiResourceVersion draftVersion = buildVersionRow(input.namespaceId, input.name, input.version, "draft");
-        AiResourceVersion reviewingVersion = buildVersionRow(input.namespaceId, input.name, input.version, "reviewing");
-        // submit() calls find() once, then publish() calls find() again
         when(aiResourceVersionPersistService.find(
                 eq(input.namespaceId), eq(input.name), eq(RESOURCE_TYPE_AGENTSPEC), eq(input.version)))
-                .thenReturn(draftVersion)
-                .thenReturn(reviewingVersion);
+                .thenReturn(draftVersion);
 
-        // Pipeline executor returns null -> pipeline disabled / no matching nodes
-        when(publishPipelineExecutor.execute(any(PublishPipelineContext.class), any()))
-                .thenReturn(null);
+        // Pipeline not available
+        when(publishPipelineExecutor.isPipelineAvailable(any(PublishPipelineResourceType.class)))
+                .thenReturn(false);
 
         // Mock updateMetaCas to return true
         when(aiResourcePersistService.updateMetaCas(
@@ -107,13 +108,20 @@ class AgentSpecSubmitPipelineAvailabilityPropertyTest {
 
         assertEquals(input.version, result, "submit should return the version");
 
-        // Verify: updateStatus was called with "online" (from publish path)
+        // Verify: updateStatus was called twice — first "reviewing" (before pipeline check), then "online" (direct publish)
         ArgumentCaptor<String> statusCaptor = ArgumentCaptor.forClass(String.class);
-        verify(aiResourceVersionPersistService).updateStatus(
+        verify(aiResourceVersionPersistService, times(2)).updateStatus(
                 eq(input.namespaceId), eq(input.name), eq(RESOURCE_TYPE_AGENTSPEC),
                 eq(input.version), statusCaptor.capture());
-        assertEquals("online", statusCaptor.getValue(),
-                "Version status should become 'online' when pipeline is disabled");
+        List<String> allStatuses = statusCaptor.getAllValues();
+        assertEquals("reviewing", allStatuses.get(0),
+                "First status update should be 'reviewing' (before pipeline check)");
+        assertEquals("online", allStatuses.get(1),
+                "Second status update should be 'online' (direct publish when pipeline is disabled)");
+
+        // Verify: execute was never called since isPipelineAvailable returned false
+        verify(publishPipelineExecutor, never()).execute(
+                any(PublishPipelineContext.class), any(), any(String.class));
 
         // Verify: updatePublishPipelineInfo was NOT called (no pipeline execution)
         verify(aiResourceVersionPersistService, never()).updatePublishPipelineInfo(
@@ -121,14 +129,15 @@ class AgentSpecSubmitPipelineAvailabilityPropertyTest {
     }
 
     /**
-     * Property 5b: When Pipeline is enabled and has matching nodes (execute returns non-blank executionId),
-     * version status becomes reviewing, editingVersion is cleared, reviewingVersion is set.
+     * Property 5b: When Pipeline is enabled and has matching nodes (isPipelineAvailable returns true),
+     * version status becomes reviewing, editingVersion is cleared, reviewingVersion is set,
+     * pipelineInfo is written with IN_PROGRESS BEFORE execute is called.
      *
      * <p><b>Validates: Requirements 4.4</b></p>
      */
     @Property(tries = 50)
     void submitSetsReviewingWhenPipelineEnabled(
-            @ForAll("submitWithPipelineInputs") SubmitWithPipelineInput input) throws Exception {
+            @ForAll("submitInputs") SubmitInput input) throws Exception {
         EnvUtil.setEnvironment(new StandardEnvironment());
 
         // Mock dependencies
@@ -149,9 +158,13 @@ class AgentSpecSubmitPipelineAvailabilityPropertyTest {
                 eq(input.namespaceId), eq(input.name), eq(RESOURCE_TYPE_AGENTSPEC), eq(input.version)))
                 .thenReturn(draftVersion);
 
-        // Pipeline executor returns a non-blank executionId -> pipeline enabled with matching nodes
-        when(publishPipelineExecutor.execute(any(PublishPipelineContext.class), any()))
-                .thenReturn(input.executionId);
+        // Pipeline is available
+        when(publishPipelineExecutor.isPipelineAvailable(any(PublishPipelineResourceType.class)))
+                .thenReturn(true);
+
+        // Pipeline executor returns the caller-provided executionId (3-arg overload)
+        when(publishPipelineExecutor.execute(any(PublishPipelineContext.class), any(), any(String.class)))
+                .thenAnswer(invocation -> invocation.getArgument(2));
 
         // Mock updateMetaCas to return true
         when(aiResourcePersistService.updateMetaCas(
@@ -186,7 +199,13 @@ class AgentSpecSubmitPipelineAvailabilityPropertyTest {
         assertTrue(!updatedVersionInfo.contains("\"editingVersion\":\"" + input.version + "\""),
                 "Meta should have editingVersion cleared, but versionInfo was: " + updatedVersionInfo);
 
-        // Verify: updatePublishPipelineInfo was called with IN_PROGRESS
+        // Capture executionId from the 3-arg execute call
+        ArgumentCaptor<String> execIdCaptor = ArgumentCaptor.forClass(String.class);
+        verify(publishPipelineExecutor).execute(
+                any(PublishPipelineContext.class), any(), execIdCaptor.capture());
+        String callerExecutionId = execIdCaptor.getValue();
+
+        // Verify: updatePublishPipelineInfo was called with IN_PROGRESS and the same executionId
         ArgumentCaptor<String> pipelineInfoCaptor = ArgumentCaptor.forClass(String.class);
         verify(aiResourceVersionPersistService).updatePublishPipelineInfo(
                 eq(input.namespaceId), eq(input.name), eq(RESOURCE_TYPE_AGENTSPEC),
@@ -194,9 +213,9 @@ class AgentSpecSubmitPipelineAvailabilityPropertyTest {
         String pipelineInfoJson = pipelineInfoCaptor.getValue();
         assertTrue(pipelineInfoJson.contains("IN_PROGRESS"),
                 "publishPipelineInfo should contain IN_PROGRESS status, but was: " + pipelineInfoJson);
-        assertTrue(pipelineInfoJson.contains(input.executionId),
-                "publishPipelineInfo should contain executionId '" + input.executionId
-                        + "', but was: " + pipelineInfoJson);
+        assertTrue(pipelineInfoJson.contains(callerExecutionId),
+                "publishPipelineInfo should contain the pre-generated executionId '"
+                        + callerExecutionId + "', but was: " + pipelineInfoJson);
     }
 
     // ---- Helper methods ----
@@ -244,26 +263,6 @@ class AgentSpecSubmitPipelineAvailabilityPropertyTest {
         }
     }
 
-    static class SubmitWithPipelineInput {
-        final String namespaceId;
-        final String name;
-        final String version;
-        final String executionId;
-
-        SubmitWithPipelineInput(String namespaceId, String name, String version, String executionId) {
-            this.namespaceId = namespaceId;
-            this.name = name;
-            this.version = version;
-            this.executionId = executionId;
-        }
-
-        @Override
-        public String toString() {
-            return "SubmitWithPipelineInput{ns='" + namespaceId + "', name='" + name
-                    + "', version='" + version + "', execId='" + executionId + "'}";
-        }
-    }
-
     // ---- Arbitraries ----
 
     @Provide
@@ -273,16 +272,5 @@ class AgentSpecSubmitPipelineAvailabilityPropertyTest {
         Arbitrary<String> versions = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20);
 
         return Combinators.combine(namespaceIds, names, versions).as(SubmitInput::new);
-    }
-
-    @Provide
-    Arbitrary<SubmitWithPipelineInput> submitWithPipelineInputs() {
-        Arbitrary<String> namespaceIds = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20);
-        Arbitrary<String> names = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20);
-        Arbitrary<String> versions = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(20);
-        Arbitrary<String> executionIds = Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(30);
-
-        return Combinators.combine(namespaceIds, names, versions, executionIds)
-                .as(SubmitWithPipelineInput::new);
     }
 }

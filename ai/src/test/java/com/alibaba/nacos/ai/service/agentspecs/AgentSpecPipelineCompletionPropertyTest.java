@@ -27,6 +27,7 @@ import com.alibaba.nacos.ai.pipeline.repository.PipelineExecutionRepository;
 import com.alibaba.nacos.ai.service.repository.AiResourcePersistService;
 import com.alibaba.nacos.ai.service.repository.AiResourceVersionPersistService;
 import com.alibaba.nacos.plugin.ai.pipeline.model.PublishPipelineContext;
+import com.alibaba.nacos.plugin.ai.pipeline.model.PublishPipelineResourceType;
 import com.alibaba.nacos.sys.env.EnvUtil;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
@@ -94,10 +95,15 @@ class AgentSpecPipelineCompletionPropertyTest {
                 eq(input.namespaceId), eq(input.name), eq(RESOURCE_TYPE_AGENTSPEC), any(Long.class), any()))
                 .thenReturn(true);
 
-        // Capture the callback from execute()
+        // Pipeline is available
+        when(publishPipelineExecutor.isPipelineAvailable(any(PublishPipelineResourceType.class)))
+                .thenReturn(true);
+
+        // Capture the callback from execute(3-arg) and return the caller-provided executionId
         ArgumentCaptor<PipelineCallback> callbackCaptor = ArgumentCaptor.forClass(PipelineCallback.class);
-        when(publishPipelineExecutor.execute(any(PublishPipelineContext.class), callbackCaptor.capture()))
-                .thenReturn("exec-" + input.executionId);
+        when(publishPipelineExecutor.execute(
+                any(PublishPipelineContext.class), callbackCaptor.capture(), any(String.class)))
+                .thenAnswer(invocation -> invocation.getArgument(2));
 
         // Construct service and call submit to trigger pipeline
         AgentSpecOperationServiceImpl service = new AgentSpecOperationServiceImpl(
@@ -161,10 +167,15 @@ class AgentSpecPipelineCompletionPropertyTest {
                 eq(input.namespaceId), eq(input.name), eq(RESOURCE_TYPE_AGENTSPEC), any(Long.class), any()))
                 .thenReturn(true);
 
-        // Capture the callback from execute()
+        // Pipeline is available
+        when(publishPipelineExecutor.isPipelineAvailable(any(PublishPipelineResourceType.class)))
+                .thenReturn(true);
+
+        // Capture the callback from execute(3-arg) and return the caller-provided executionId
         ArgumentCaptor<PipelineCallback> callbackCaptor = ArgumentCaptor.forClass(PipelineCallback.class);
-        when(publishPipelineExecutor.execute(any(PublishPipelineContext.class), callbackCaptor.capture()))
-                .thenReturn("exec-" + input.executionId);
+        when(publishPipelineExecutor.execute(
+                any(PublishPipelineContext.class), callbackCaptor.capture(), any(String.class)))
+                .thenAnswer(invocation -> invocation.getArgument(2));
 
         // After submit(), the meta's reviewingVersion will be set to the version.
         // For the callback's find() call, return meta with reviewingVersion set.
