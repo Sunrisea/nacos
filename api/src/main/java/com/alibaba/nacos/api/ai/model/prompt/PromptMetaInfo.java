@@ -28,13 +28,13 @@ public class PromptMetaInfo extends PromptMetaSummary {
     
     private static final long serialVersionUID = 1L;
     
-    private List<String> versions = new ArrayList<>();
+    private List<PromptVersionSummary> versions = new ArrayList<>();
     
-    public List<String> getVersions() {
+    public List<PromptVersionSummary> getVersions() {
         return versions;
     }
     
-    public void setVersions(List<String> versions) {
+    public void setVersions(List<PromptVersionSummary> versions) {
         this.versions = versions;
     }
 }
