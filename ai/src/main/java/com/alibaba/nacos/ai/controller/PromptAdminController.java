@@ -91,7 +91,7 @@ public class PromptAdminController {
      */
     @DeleteMapping
     @Secured(action = ActionTypes.WRITE, signType = SignType.AI, apiType = ApiType.ADMIN_API)
-    public Result<Boolean> deletePrompt(PromptForm form) throws NacosException {
+    public Result<Boolean> deletePrompt(PromptForm form, HttpServletRequest request) throws NacosException {
         form.validate();
         promptOperationService.deletePrompt(form.getNamespaceId(), form.getPromptKey());
         return Result.success(true);
