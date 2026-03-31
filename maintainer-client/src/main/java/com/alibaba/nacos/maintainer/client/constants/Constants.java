@@ -77,15 +77,27 @@ public class Constants {
         
         public static final String AI_PROMPT_DESCRIPTION_ADMIN_PATH = AI_PROMPT_ADMIN_PATH + "/description";
         
-        /** @deprecated Use {@link #AI_PROMPT_GOVERNANCE_ADMIN_PATH} instead. */
+        /**
+         * Deprecated admin path for prompt metadata.
+         *
+         * @deprecated Use {@link #AI_PROMPT_GOVERNANCE_ADMIN_PATH} instead.
+         */
         @Deprecated
         public static final String AI_PROMPT_METADATA_ADMIN_PATH = AI_PROMPT_ADMIN_PATH + "/metadata";
         
-        /** @deprecated Use {@link #AI_PROMPT_VERSION_DETAIL_ADMIN_PATH} instead. */
+        /**
+         * Deprecated admin path for prompt detail.
+         *
+         * @deprecated Use {@link #AI_PROMPT_VERSION_DETAIL_ADMIN_PATH} instead.
+         */
         @Deprecated
         public static final String AI_PROMPT_DETAIL_ADMIN_PATH = AI_PROMPT_ADMIN_PATH + "/detail";
         
-        /** @deprecated Use {@link #AI_PROMPT_BIZ_TAGS_ADMIN_PATH} or updateLabels instead. */
+        /**
+         * Deprecated admin path for prompt label operations.
+         *
+         * @deprecated Use updateLabels API instead.
+         */
         @Deprecated
         public static final String AI_PROMPT_LABEL_ADMIN_PATH = AI_PROMPT_ADMIN_PATH + "/label";
 
