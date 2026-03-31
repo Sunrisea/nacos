@@ -605,10 +605,16 @@ public class PromptOperationServiceImpl implements PromptOperationService {
         
         // Load version list
         List<AiResourceVersion> allVersions = loadAllVersionRows(namespaceId, promptKey);
-        List<String> versions = new ArrayList<>();
+        List<PromptVersionSummary> versions = new ArrayList<>();
         for (AiResourceVersion v : allVersions) {
             if (v != null) {
-                versions.add(v.getVersion());
+                PromptVersionSummary vs = new PromptVersionSummary();
+                vs.setPromptKey(promptKey);
+                vs.setVersion(v.getVersion());
+                vs.setStatus(v.getStatus());
+                vs.setSrcUser(v.getAuthor());
+                vs.setGmtModified(v.getGmtModified() == null ? null : v.getGmtModified().getTime());
+                versions.add(vs);
             }
         }
         detail.setVersions(versions);

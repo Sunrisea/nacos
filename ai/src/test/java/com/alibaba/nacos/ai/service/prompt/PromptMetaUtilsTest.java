@@ -17,6 +17,7 @@
 package com.alibaba.nacos.ai.service.prompt;
 
 import com.alibaba.nacos.api.ai.model.prompt.PromptMetaInfo;
+import com.alibaba.nacos.api.ai.model.prompt.PromptVersionSummary;
 import com.alibaba.nacos.api.exception.NacosException;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +31,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PromptMetaUtilsTest {
+    
+    private static PromptVersionSummary vs(String version) {
+        PromptVersionSummary s = new PromptVersionSummary();
+        s.setVersion(version);
+        return s;
+    }
     
     @Test
     void normalizeMetaShouldInitCollectionsWhenNullFields() {
@@ -46,12 +53,12 @@ class PromptMetaUtilsTest {
         meta.setPromptKey("p1");
         meta.setLabels(new HashMap<>());
         meta.getLabels().put("prod", "1.0.0");
-        meta.setVersions(new ArrayList<>(List.of("1.0.0")));
+        meta.setVersions(new ArrayList<>(List.of(vs("1.0.0"))));
         meta.setBizTags(new ArrayList<>(List.of("finance")));
         
         PromptMetaInfo copied = PromptMetaUtils.cloneMeta(meta);
         copied.getLabels().put("gray", "1.0.1");
-        copied.getVersions().add("1.0.1");
+        copied.getVersions().add(vs("1.0.1"));
         copied.getBizTags().add("ops");
         
         assertEquals(1, meta.getLabels().size());
@@ -64,7 +71,7 @@ class PromptMetaUtilsTest {
         PromptMetaInfo meta = new PromptMetaInfo();
         meta.setLabels(new HashMap<>());
         meta.getLabels().put("prod", "2.0.0");
-        meta.setVersions(new ArrayList<>(List.of("1.0.0", "2.0.0")));
+        meta.setVersions(new ArrayList<>(List.of(vs("1.0.0"), vs("2.0.0"))));
         meta.setLatestVersion("2.0.0");
         String actual = PromptMetaUtils.resolveTargetVersion(meta, "1.0.0", "prod");
         assertEquals("1.0.0", actual);
@@ -74,7 +81,7 @@ class PromptMetaUtilsTest {
     void resolveTargetVersionShouldThrowWhenLabelNotFound() {
         PromptMetaInfo meta = new PromptMetaInfo();
         meta.setLabels(new HashMap<>());
-        meta.setVersions(new ArrayList<>(List.of("1.0.0")));
+        meta.setVersions(new ArrayList<>(List.of(vs("1.0.0"))));
         meta.setLatestVersion("1.0.0");
         assertThrows(NacosException.class, () -> PromptMetaUtils.resolveTargetVersion(meta, null, "prod"));
     }
@@ -83,7 +90,7 @@ class PromptMetaUtilsTest {
     void resolveTargetVersionShouldThrowWhenVersionInvalid() {
         PromptMetaInfo meta = new PromptMetaInfo();
         meta.setLabels(new HashMap<>());
-        meta.setVersions(new ArrayList<>(List.of("1.0.0")));
+        meta.setVersions(new ArrayList<>(List.of(vs("1.0.0"))));
         meta.setLatestVersion("1.0.0");
         assertThrows(NacosException.class, () -> PromptMetaUtils.resolveTargetVersion(meta, "1.0", null));
     }
@@ -92,7 +99,7 @@ class PromptMetaUtilsTest {
     void resolveTargetVersionShouldFallbackToLatestOrThrow() throws NacosException {
         PromptMetaInfo meta = new PromptMetaInfo();
         meta.setLabels(new HashMap<>());
-        meta.setVersions(new ArrayList<>(List.of("1.0.0")));
+        meta.setVersions(new ArrayList<>(List.of(vs("1.0.0"))));
         meta.setLatestVersion("1.0.0");
         assertEquals("1.0.0", PromptMetaUtils.resolveTargetVersion(meta, null, null));
         

@@ -20,6 +20,7 @@ import com.alibaba.nacos.ai.utils.PromptVersionUtils;
 import com.alibaba.nacos.api.ai.model.prompt.PromptDescriptor;
 import com.alibaba.nacos.api.ai.model.prompt.PromptLabelVersionMapping;
 import com.alibaba.nacos.api.ai.model.prompt.PromptMetaInfo;
+import com.alibaba.nacos.api.ai.model.prompt.PromptVersionSummary;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.api.exception.api.NacosApiException;
 import com.alibaba.nacos.api.model.v2.ErrorCode;
@@ -27,6 +28,7 @@ import com.alibaba.nacos.common.utils.StringUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Prompt meta utility methods.
@@ -212,7 +214,16 @@ public final class PromptMetaUtils {
         if (mapping != null) {
             result.setSchemaVersion(mapping.getSchemaVersion());
             result.setLatestVersion(mapping.getLatestVersion());
-            result.setVersions(mapping.getVersions() == null ? new ArrayList<>(4) : new ArrayList<>(mapping.getVersions()));
+            List<PromptVersionSummary> versionSummaries = new ArrayList<>(4);
+            if (mapping.getVersions() != null) {
+                for (String v : mapping.getVersions()) {
+                    PromptVersionSummary vs = new PromptVersionSummary();
+                    vs.setPromptKey(promptKey);
+                    vs.setVersion(v);
+                    versionSummaries.add(vs);
+                }
+            }
+            result.setVersions(versionSummaries);
             result.setLabels(mapping.getLabels() == null ? new HashMap<>(4) : new HashMap<>(mapping.getLabels()));
             result.setGmtModified(mapping.getGmtModified());
         } else {
@@ -249,7 +260,15 @@ public final class PromptMetaUtils {
         PromptLabelVersionMapping mapping = new PromptLabelVersionMapping();
         mapping.setLatestVersion(meta.getLatestVersion());
         mapping.setLabels(meta.getLabels());
-        mapping.setVersions(meta.getVersions());
+        List<String> versionStrings = new ArrayList<>(4);
+        if (meta.getVersions() != null) {
+            for (PromptVersionSummary vs : meta.getVersions()) {
+                if (vs != null && vs.getVersion() != null) {
+                    versionStrings.add(vs.getVersion());
+                }
+            }
+        }
+        mapping.setVersions(versionStrings);
         return resolveTargetVersion(mapping, version, label);
     }
     
