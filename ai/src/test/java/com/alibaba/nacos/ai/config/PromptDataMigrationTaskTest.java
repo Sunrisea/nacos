@@ -105,6 +105,8 @@ class PromptDataMigrationTaskTest {
     
     private PromptDataMigrationTask task;
     
+    private NacosPromptLegacyDataReader nacosReader;
+    
     private static final org.springframework.core.env.ConfigurableEnvironment CACHED_ENVIRONMENT =
             EnvUtil.getEnvironment();
     
@@ -114,8 +116,10 @@ class PromptDataMigrationTaskTest {
         AiResourceStorageRouter.reset();
         lenient().when(storage.type()).thenReturn("nacos_config");
         AiResourceStorageRouter.join(storage);
+        nacosReader = new NacosPromptLegacyDataReader(configInfoPersistService, configQueryChainService);
+        List<PromptLegacyDataReader> readers = Collections.singletonList(nacosReader);
         task = new PromptDataMigrationTask(aiResourcePersistService, aiResourceVersionPersistService,
-                promptOperationService, configInfoPersistService, configQueryChainService, configOperationService);
+                promptOperationService, configQueryChainService, configOperationService, readers);
     }
     
     @AfterEach
@@ -143,8 +147,9 @@ class PromptDataMigrationTaskTest {
     void testShouldSkipWhenDisabled() {
         System.setProperty("nacos.ai.prompt.migration.enabled", "false");
         EnvUtil.setEnvironment(new StandardEnvironment());
+        List<PromptLegacyDataReader> readers = Collections.singletonList(nacosReader);
         task = new PromptDataMigrationTask(aiResourcePersistService, aiResourceVersionPersistService,
-                promptOperationService, configInfoPersistService, configQueryChainService, configOperationService);
+                promptOperationService, configQueryChainService, configOperationService, readers);
         
         task.onApplicationEvent(createRootContextEvent());
         
