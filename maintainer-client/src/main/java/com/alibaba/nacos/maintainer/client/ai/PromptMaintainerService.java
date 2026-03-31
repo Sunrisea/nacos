@@ -248,4 +248,112 @@ public interface PromptMaintainerService {
      * @throws NacosException if fail to update biz tags
      */
     void updateBizTags(String namespaceId, String promptKey, String bizTags) throws NacosException;
+    
+    // ========== Legacy compatibility APIs (deprecated) ==========
+    
+    /**
+     * Legacy get prompt metadata.
+     *
+     * @deprecated Use {@link #getPromptGovernanceDetail} instead.
+     */
+    @Deprecated
+    PromptMetaInfo getPromptMeta(String namespaceId, String promptKey) throws NacosException;
+    
+    /**
+     * Legacy get prompt metadata with default namespace.
+     *
+     * @deprecated Use {@link #getPromptGovernanceDetail} instead.
+     */
+    @Deprecated
+    default PromptMetaInfo getPromptMeta(String promptKey) throws NacosException {
+        return getPromptMeta(Constants.DEFAULT_NAMESPACE_ID, promptKey);
+    }
+    
+    /**
+     * Legacy query prompt detail by version/label/latest.
+     *
+     * @deprecated Use {@link #getVersionDetail} instead.
+     */
+    @Deprecated
+    PromptVersionInfo queryPromptDetail(String namespaceId, String promptKey, String version, String label)
+            throws NacosException;
+    
+    /**
+     * Legacy bind label to a prompt version.
+     *
+     * @deprecated Use {@link #updateLabels} instead.
+     */
+    @Deprecated
+    boolean bindLabel(String namespaceId, String promptKey, String label, String version) throws NacosException;
+    
+    /**
+     * Legacy unbind label from a prompt.
+     *
+     * @deprecated Use {@link #updateLabels} instead.
+     */
+    @Deprecated
+    boolean unbindLabel(String namespaceId, String promptKey, String label) throws NacosException;
+    
+    /**
+     * Legacy one-shot publish a new version of prompt.
+     *
+     * @deprecated Use {@link #createDraft} + {@link #submit} instead.
+     */
+    @Deprecated
+    boolean publishPrompt(String namespaceId, String promptKey, String version, String template,
+            String commitMsg, String description, String bizTags) throws NacosException;
+    
+    /**
+     * Legacy publish with variable definitions.
+     *
+     * @deprecated Use {@link #createDraft} + {@link #submit} instead.
+     */
+    @Deprecated
+    default boolean publishPrompt(String namespaceId, String promptKey, String version, String template,
+            String commitMsg, String description, String bizTags, String variables) throws NacosException {
+        return publishPrompt(namespaceId, promptKey, version, template, commitMsg, description, bizTags);
+    }
+    
+    /**
+     * Legacy publish without tags.
+     *
+     * @deprecated Use {@link #createDraft} + {@link #submit} instead.
+     */
+    @Deprecated
+    default boolean publishPrompt(String namespaceId, String promptKey, String version, String template,
+            String commitMsg, String description) throws NacosException {
+        return publishPrompt(namespaceId, promptKey, version, template, commitMsg, description, (String) null);
+    }
+    
+    /**
+     * Legacy publish with default namespace.
+     *
+     * @deprecated Use {@link #createDraft} + {@link #submit} instead.
+     */
+    @Deprecated
+    default boolean publishPrompt(String promptKey, String version, String template, String commitMsg)
+            throws NacosException {
+        return publishPrompt(Constants.DEFAULT_NAMESPACE_ID, promptKey, version, template, commitMsg, null,
+                (String) null);
+    }
+    
+    /**
+     * Legacy update prompt metadata (description and tags).
+     *
+     * @deprecated Use {@link #updateDescription} and {@link #updateBizTags} instead.
+     */
+    @Deprecated
+    boolean updatePromptMetadata(String namespaceId, String promptKey, String description, String bizTags)
+            throws NacosException;
+    
+    /**
+     * Legacy update prompt metadata (description only).
+     *
+     * @deprecated Use {@link #updateDescription} instead.
+     */
+    @Deprecated
+    default boolean updatePromptMetadata(String namespaceId, String promptKey, String description)
+            throws NacosException {
+        return updatePromptMetadata(namespaceId, promptKey, description, null);
+    }
 }

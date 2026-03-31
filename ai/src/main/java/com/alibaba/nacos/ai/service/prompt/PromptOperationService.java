@@ -242,4 +242,60 @@ public interface PromptOperationService {
      * @throws NacosException if refresh fails
      */
     void refreshLatestMirror(String namespaceId, String promptKey) throws NacosException;
+    
+    // ========== Legacy compatibility APIs (deprecated) ==========
+    
+    /**
+     * Legacy one-shot publish: creates a draft, submits it, and publishes if no pipeline is configured.
+     * If a pipeline exists, only draft + submit are executed; the caller must complete the remaining
+     * lifecycle steps (publish/online) via the new APIs.
+     *
+     * @deprecated Use {@link #createDraft} + {@link #submit} instead.
+     */
+    @Deprecated
+    boolean publishPromptVersion(String namespaceId, String promptKey, String version, String template,
+            String commitMsg, String description, List<String> bizTags, List<PromptVariable> variables)
+            throws NacosException;
+    
+    /**
+     * Legacy get prompt metadata.
+     *
+     * @deprecated Use {@link #getPromptDetail} instead.
+     */
+    @Deprecated
+    PromptMetaInfo getPromptMeta(String namespaceId, String promptKey) throws NacosException;
+    
+    /**
+     * Legacy query prompt detail by version/label/latest.
+     *
+     * @deprecated Use {@link #getPromptVersionDetail} for admin or {@link #queryPrompt} for client.
+     */
+    @Deprecated
+    PromptVersionInfo queryPromptDetail(String namespaceId, String promptKey, String version, String label)
+            throws NacosException;
+    
+    /**
+     * Legacy bind label to a prompt version.
+     *
+     * @deprecated Use {@link #updateLabels} instead.
+     */
+    @Deprecated
+    boolean bindLabel(String namespaceId, String promptKey, String label, String version) throws NacosException;
+    
+    /**
+     * Legacy unbind label from a prompt.
+     *
+     * @deprecated Use {@link #updateLabels} instead.
+     */
+    @Deprecated
+    boolean unbindLabel(String namespaceId, String promptKey, String label) throws NacosException;
+    
+    /**
+     * Legacy update prompt metadata (description and bizTags).
+     *
+     * @deprecated Use {@link #updateDescription} and {@link #updateBizTags} instead.
+     */
+    @Deprecated
+    boolean updatePromptMetadata(String namespaceId, String promptKey, String description, List<String> bizTags)
+            throws NacosException;
 }

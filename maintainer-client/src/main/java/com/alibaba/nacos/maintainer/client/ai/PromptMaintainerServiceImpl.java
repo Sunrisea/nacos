@@ -286,4 +286,120 @@ final class PromptMaintainerServiceImpl extends AbstractAiDelegateMaintainerServ
                 .setParamValue(params).build();
         executeSyncHttpRequest(httpRequest);
     }
+    
+    // ========== Legacy compatibility implementations (deprecated) ==========
+    
+    @Deprecated
+    @Override
+    public PromptMetaInfo getPromptMeta(String namespaceId, String promptKey) throws NacosException {
+        namespaceId = resolveNamespace(namespaceId);
+        Map<String, String> params = new HashMap<>(4);
+        params.put("namespaceId", namespaceId);
+        params.put("promptKey", promptKey);
+        HttpRequest httpRequest = buildHttpRequestBuilder(buildRequestResource(namespaceId, promptKey))
+                .setHttpMethod(HttpMethod.GET).setPath(Constants.AdminApiPath.AI_PROMPT_METADATA_ADMIN_PATH)
+                .setParamValue(params).build();
+        HttpRestResult<String> restResult = executeSyncHttpRequest(httpRequest);
+        Result<PromptMetaInfo> result = JacksonUtils.toObj(restResult.getData(),
+                new TypeReference<Result<PromptMetaInfo>>() {
+                });
+        return result.getData();
+    }
+    
+    @Deprecated
+    @Override
+    public PromptVersionInfo queryPromptDetail(String namespaceId, String promptKey, String version, String label)
+            throws NacosException {
+        namespaceId = resolveNamespace(namespaceId);
+        Map<String, String> params = new HashMap<>(8);
+        params.put("namespaceId", namespaceId);
+        params.put("promptKey", promptKey);
+        putIfNotBlank(params, "version", version);
+        putIfNotBlank(params, "label", label);
+        HttpRequest httpRequest = buildHttpRequestBuilder(buildRequestResource(namespaceId, promptKey))
+                .setHttpMethod(HttpMethod.GET).setPath(Constants.AdminApiPath.AI_PROMPT_DETAIL_ADMIN_PATH)
+                .setParamValue(params).build();
+        HttpRestResult<String> restResult = executeSyncHttpRequest(httpRequest);
+        Result<PromptVersionInfo> result = JacksonUtils.toObj(restResult.getData(),
+                new TypeReference<Result<PromptVersionInfo>>() {
+                });
+        return result.getData();
+    }
+    
+    @Deprecated
+    @Override
+    public boolean bindLabel(String namespaceId, String promptKey, String label, String version)
+            throws NacosException {
+        namespaceId = resolveNamespace(namespaceId);
+        Map<String, String> params = new HashMap<>(8);
+        params.put("namespaceId", namespaceId);
+        params.put("promptKey", promptKey);
+        params.put("label", label);
+        params.put("version", version);
+        HttpRequest httpRequest = buildHttpRequestBuilder(buildRequestResource(namespaceId, promptKey))
+                .setHttpMethod(HttpMethod.PUT).setPath(Constants.AdminApiPath.AI_PROMPT_LABEL_ADMIN_PATH)
+                .setParamValue(params).build();
+        HttpRestResult<String> restResult = executeSyncHttpRequest(httpRequest);
+        Result<Boolean> result = JacksonUtils.toObj(restResult.getData(), new TypeReference<Result<Boolean>>() {
+        });
+        return Boolean.TRUE.equals(result.getData());
+    }
+    
+    @Deprecated
+    @Override
+    public boolean unbindLabel(String namespaceId, String promptKey, String label) throws NacosException {
+        namespaceId = resolveNamespace(namespaceId);
+        Map<String, String> params = new HashMap<>(8);
+        params.put("namespaceId", namespaceId);
+        params.put("promptKey", promptKey);
+        params.put("label", label);
+        HttpRequest httpRequest = buildHttpRequestBuilder(buildRequestResource(namespaceId, promptKey))
+                .setHttpMethod(HttpMethod.DELETE).setPath(Constants.AdminApiPath.AI_PROMPT_LABEL_ADMIN_PATH)
+                .setParamValue(params).build();
+        HttpRestResult<String> restResult = executeSyncHttpRequest(httpRequest);
+        Result<Boolean> result = JacksonUtils.toObj(restResult.getData(), new TypeReference<Result<Boolean>>() {
+        });
+        return Boolean.TRUE.equals(result.getData());
+    }
+    
+    @Deprecated
+    @Override
+    public boolean publishPrompt(String namespaceId, String promptKey, String version, String template,
+            String commitMsg, String description, String bizTags) throws NacosException {
+        namespaceId = resolveNamespace(namespaceId);
+        Map<String, String> params = new HashMap<>(16);
+        params.put("namespaceId", namespaceId);
+        params.put("promptKey", promptKey);
+        params.put("version", version);
+        params.put("template", template);
+        putIfNotBlank(params, "commitMsg", commitMsg);
+        putIfNotBlank(params, "description", description);
+        putIfNotBlank(params, "bizTags", bizTags);
+        HttpRequest httpRequest = buildHttpRequestBuilder(buildRequestResource(namespaceId, promptKey))
+                .setHttpMethod(HttpMethod.POST).setPath(Constants.AdminApiPath.AI_PROMPT_ADMIN_PATH)
+                .setParamValue(params).build();
+        HttpRestResult<String> restResult = executeSyncHttpRequest(httpRequest);
+        Result<Boolean> result = JacksonUtils.toObj(restResult.getData(), new TypeReference<Result<Boolean>>() {
+        });
+        return Boolean.TRUE.equals(result.getData());
+    }
+    
+    @Deprecated
+    @Override
+    public boolean updatePromptMetadata(String namespaceId, String promptKey, String description, String bizTags)
+            throws NacosException {
+        namespaceId = resolveNamespace(namespaceId);
+        Map<String, String> params = new HashMap<>(8);
+        params.put("namespaceId", namespaceId);
+        params.put("promptKey", promptKey);
+        putIfNotBlank(params, "description", description);
+        putIfNotBlank(params, "bizTags", bizTags);
+        HttpRequest httpRequest = buildHttpRequestBuilder(buildRequestResource(namespaceId, promptKey))
+                .setHttpMethod(HttpMethod.PUT).setPath(Constants.AdminApiPath.AI_PROMPT_METADATA_ADMIN_PATH)
+                .setParamValue(params).build();
+        HttpRestResult<String> restResult = executeSyncHttpRequest(httpRequest);
+        Result<Boolean> result = JacksonUtils.toObj(restResult.getData(), new TypeReference<Result<Boolean>>() {
+        });
+        return Boolean.TRUE.equals(result.getData());
+    }
 }

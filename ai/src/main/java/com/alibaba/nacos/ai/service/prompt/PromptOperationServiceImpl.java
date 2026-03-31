@@ -1209,4 +1209,64 @@ public class PromptOperationServiceImpl implements PromptOperationService {
             this.pipeline = pipeline;
         }
     }
+    
+    // ========== Legacy compatibility implementations (deprecated) ==========
+    
+    @Deprecated
+    @Override
+    public boolean publishPromptVersion(String namespaceId, String promptKey, String version, String template,
+            String commitMsg, String description, List<String> bizTags, List<PromptVariable> variables)
+            throws NacosException {
+        String bizTagsJson = (bizTags != null) ? JacksonUtils.toJson(bizTags) : null;
+        createDraft(namespaceId, promptKey, null, version, template, variables, commitMsg, description, bizTagsJson);
+        submit(namespaceId, promptKey, version);
+        return true;
+    }
+    
+    @Deprecated
+    @Override
+    public PromptMetaInfo getPromptMeta(String namespaceId, String promptKey) throws NacosException {
+        return getPromptDetail(namespaceId, promptKey);
+    }
+    
+    @Deprecated
+    @Override
+    public PromptVersionInfo queryPromptDetail(String namespaceId, String promptKey, String version, String label)
+            throws NacosException {
+        return queryPrompt(namespaceId, promptKey, version, label);
+    }
+    
+    @Deprecated
+    @Override
+    public boolean bindLabel(String namespaceId, String promptKey, String label, String version)
+            throws NacosException {
+        PromptMetaInfo detail = getPromptDetail(namespaceId, promptKey);
+        Map<String, String> labels = detail.getLabels() != null ? new HashMap<>(detail.getLabels()) : new HashMap<>();
+        labels.put(label, version);
+        updateLabels(namespaceId, promptKey, labels);
+        return true;
+    }
+    
+    @Deprecated
+    @Override
+    public boolean unbindLabel(String namespaceId, String promptKey, String label) throws NacosException {
+        PromptMetaInfo detail = getPromptDetail(namespaceId, promptKey);
+        Map<String, String> labels = detail.getLabels() != null ? new HashMap<>(detail.getLabels()) : new HashMap<>();
+        labels.remove(label);
+        updateLabels(namespaceId, promptKey, labels);
+        return true;
+    }
+    
+    @Deprecated
+    @Override
+    public boolean updatePromptMetadata(String namespaceId, String promptKey, String description, List<String> bizTags)
+            throws NacosException {
+        if (description != null) {
+            updateDescription(namespaceId, promptKey, description);
+        }
+        if (bizTags != null) {
+            updateBizTags(namespaceId, promptKey, JacksonUtils.toJson(bizTags));
+        }
+        return true;
+    }
 }
