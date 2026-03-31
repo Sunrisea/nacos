@@ -287,24 +287,23 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
     
     private void migrateOneVersion(String namespace, String promptKey, String version,
             PromptLegacyDataReader reader) throws Exception {
-        String content = reader.readVersionContent(promptKey, version);
-        if (StringUtils.isBlank(content)) {
+        PromptVersionInfo versionInfo = reader.readVersionContent(promptKey, version);
+        if (versionInfo == null) {
             LOGGER.warn("No content found for prompt '{}' version '{}', skip", promptKey, version);
             return;
         }
         
-        // Write to typed storage FIRST (idempotent overwrite)
-        PromptVersionInfo versionInfo;
-        try {
-            versionInfo = JacksonUtils.toObj(content, PromptVersionInfo.class);
-        } catch (Exception e) {
-            versionInfo = new PromptVersionInfo();
-            versionInfo.setPromptKey(promptKey);
-            versionInfo.setVersion(version);
-            versionInfo.setTemplate(content);
-        }
         versionInfo.setPromptKey(promptKey);
         versionInfo.setVersion(version);
+        
+        // Pre-compute md5 from content without md5 field
+        versionInfo.setMd5(null);
+        String contentJson = JacksonUtils.toJson(versionInfo);
+        String md5 = com.alibaba.nacos.common.utils.MD5Utils.md5Hex(contentJson,
+                java.nio.charset.StandardCharsets.UTF_8.name());
+        versionInfo.setMd5(md5);
+        
+        // Write to typed storage FIRST (idempotent overwrite)
         writeToTypedStorage(namespace, promptKey, version, versionInfo);
         
         // Then create DB record (idempotent: skip if exists)
@@ -321,8 +320,8 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         versionRecord.setType(RESOURCE_TYPE_PROMPT);
         versionRecord.setVersion(version);
         versionRecord.setStatus(VERSION_STATUS_ONLINE);
-        versionRecord.setAuthor("-");
-        versionRecord.setDesc("migrated from legacy config");
+        versionRecord.setAuthor(versionInfo.getSrcUser() != null ? versionInfo.getSrcUser() : "-");
+        versionRecord.setDesc(versionInfo.getCommitMsg() != null ? versionInfo.getCommitMsg() : "migrated from legacy config");
         versionRecord.setStorage(buildStorageJson(namespace, promptKey, version));
         
         try {

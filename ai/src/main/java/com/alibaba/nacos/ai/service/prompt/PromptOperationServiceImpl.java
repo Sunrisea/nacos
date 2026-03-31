@@ -42,6 +42,7 @@ import com.alibaba.nacos.api.exception.api.NacosApiException;
 import com.alibaba.nacos.api.model.Page;
 import com.alibaba.nacos.api.model.v2.ErrorCode;
 import com.alibaba.nacos.common.utils.JacksonUtils;
+import com.alibaba.nacos.common.utils.MD5Utils;
 import com.alibaba.nacos.common.utils.StringUtils;
 import com.alibaba.nacos.config.server.model.ConfigRequestInfo;
 import com.alibaba.nacos.config.server.model.form.ConfigForm;
@@ -149,12 +150,12 @@ public class PromptOperationServiceImpl implements PromptOperationService {
             String version = StringUtils.isBlank(targetVersion) ? DEFAULT_INITIAL_VERSION : targetVersion;
             validateVersion(version);
             
-            writePromptToStorage(namespaceId, promptKey, version, template, variables, commitMsg);
+            writePromptToStorage(namespaceId, promptKey, version, template, variables);
             
             String currentUser = VisibilityHelper.resolveCurrentIdentity();
             AiResourceVersion versionRow = buildVersionRow(namespaceId, promptKey, version,
                     StringUtils.isBlank(currentUser) ? DEFAULT_AUTHOR : currentUser,
-                    VERSION_STATUS_DRAFT, description);
+                    VERSION_STATUS_DRAFT, commitMsg);
             aiResourceVersionPersistService.insert(versionRow);
             
             PromptVersionInfoPojo info = new PromptVersionInfoPojo();
@@ -200,12 +201,12 @@ public class PromptOperationServiceImpl implements PromptOperationService {
             checkVersionNotExists(namespaceId, promptKey, newVersion);
             
             writePromptToStorage(namespaceId, promptKey, newVersion,
-                    baseContent.getTemplate(), baseContent.getVariables(), commitMsg);
+                    baseContent.getTemplate(), baseContent.getVariables());
             
             String currentUser = VisibilityHelper.resolveCurrentIdentity();
             AiResourceVersion versionRow = buildVersionRow(namespaceId, promptKey, newVersion,
                     StringUtils.isBlank(currentUser) ? DEFAULT_AUTHOR : currentUser,
-                    VERSION_STATUS_DRAFT, baseRow.getDesc());
+                    VERSION_STATUS_DRAFT, commitMsg);
             aiResourceVersionPersistService.insert(versionRow);
             
             info.setEditingVersion(newVersion);
@@ -223,12 +224,12 @@ public class PromptOperationServiceImpl implements PromptOperationService {
         validateVersion(newVersion);
         checkVersionNotExists(namespaceId, promptKey, newVersion);
         
-        writePromptToStorage(namespaceId, promptKey, newVersion, template, variables, commitMsg);
+        writePromptToStorage(namespaceId, promptKey, newVersion, template, variables);
         
         String currentUser = VisibilityHelper.resolveCurrentIdentity();
         AiResourceVersion versionRow = buildVersionRow(namespaceId, promptKey, newVersion,
                 StringUtils.isBlank(currentUser) ? DEFAULT_AUTHOR : currentUser,
-                VERSION_STATUS_DRAFT, description);
+                VERSION_STATUS_DRAFT, commitMsg);
         aiResourceVersionPersistService.insert(versionRow);
         
         info.setEditingVersion(newVersion);
@@ -262,7 +263,14 @@ public class PromptOperationServiceImpl implements PromptOperationService {
                     "Current editing version is not draft: " + editing);
         }
         
-        writePromptToStorage(namespaceId, promptKey, editing, template, variables, commitMsg);
+        writePromptToStorage(namespaceId, promptKey, editing, template, variables);
+        
+        // Update commitMsg in DB if provided
+        if (StringUtils.isNotBlank(commitMsg)) {
+            String storageJson = buildStorageJson(namespaceId, promptKey, editing);
+            aiResourceVersionPersistService.updateStorageAndDesc(namespaceId, promptKey, RESOURCE_TYPE_PROMPT,
+                    editing, storageJson, commitMsg);
+        }
     }
     
     @Override
@@ -615,6 +623,7 @@ public class PromptOperationServiceImpl implements PromptOperationService {
                 vs.setVersion(v.getVersion());
                 vs.setStatus(v.getStatus());
                 vs.setSrcUser(v.getAuthor());
+                vs.setCommitMsg(v.getDesc());
                 vs.setGmtModified(v.getGmtModified() == null ? null : v.getGmtModified().getTime());
                 versionDetails.add(vs);
             }
@@ -638,7 +647,11 @@ public class PromptOperationServiceImpl implements PromptOperationService {
             throw new NacosApiException(NacosException.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND,
                     "Prompt version not found: " + promptKey + "@" + version);
         }
-        return loadPromptFromStorage(namespaceId, promptKey, version);
+        PromptVersionInfo result = loadPromptFromStorage(namespaceId, promptKey, version);
+        result.setSrcUser(versionRow.getAuthor());
+        result.setCommitMsg(versionRow.getDesc());
+        result.setStatus(versionRow.getStatus());
+        return result;
     }
     
     @Override
@@ -716,6 +729,7 @@ public class PromptOperationServiceImpl implements PromptOperationService {
                 summary.setVersion(v.getVersion());
                 summary.setStatus(v.getStatus());
                 summary.setSrcUser(v.getAuthor());
+                summary.setCommitMsg(v.getDesc());
                 summary.setGmtModified(v.getGmtModified() == null ? null : v.getGmtModified().getTime());
                 items.add(summary);
             }
@@ -755,7 +769,10 @@ public class PromptOperationServiceImpl implements PromptOperationService {
                     "Prompt version not online: " + promptKey + "@" + resolved);
         }
         
-        return loadPromptFromStorage(namespaceId, promptKey, resolved);
+        PromptVersionInfo result = loadPromptFromStorage(namespaceId, promptKey, resolved);
+        result.setSrcUser(versionRow.getAuthor());
+        result.setCommitMsg(versionRow.getDesc());
+        return result;
     }
     
     @Override
@@ -795,7 +812,7 @@ public class PromptOperationServiceImpl implements PromptOperationService {
     // ========== Private methods ==========
     
     private void writePromptToStorage(String namespaceId, String promptKey, String version, String template,
-            List<PromptVariable> variables, String commitMsg) throws NacosException {
+            List<PromptVariable> variables) throws NacosException {
         String provider = resolvePromptStorageProvider();
         
         PromptVersionInfo content = new PromptVersionInfo();
@@ -803,8 +820,12 @@ public class PromptOperationServiceImpl implements PromptOperationService {
         content.setVersion(version);
         content.setTemplate(template);
         content.setVariables(variables);
-        content.setCommitMsg(commitMsg);
         content.setGmtModified(System.currentTimeMillis());
+        
+        // Pre-compute md5 from content without md5 field, then store it
+        String contentJson = JacksonUtils.toJson(content);
+        String md5 = MD5Utils.md5Hex(contentJson, StandardCharsets.UTF_8.name());
+        content.setMd5(md5);
         
         byte[] contentBytes = JacksonUtils.toJson(content).getBytes(StandardCharsets.UTF_8);
         StorageKey storageKey = NacosConfigAiResourceStorage.buildStorageKey(provider, namespaceId,

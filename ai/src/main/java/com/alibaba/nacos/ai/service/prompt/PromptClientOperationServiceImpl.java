@@ -20,8 +20,6 @@ import com.alibaba.nacos.api.ai.model.prompt.PromptVersionInfo;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.api.exception.api.NacosApiException;
 import com.alibaba.nacos.api.model.v2.ErrorCode;
-import com.alibaba.nacos.common.utils.JacksonUtils;
-import com.alibaba.nacos.common.utils.MD5Utils;
 import com.alibaba.nacos.common.utils.StringUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -54,8 +52,7 @@ public class PromptClientOperationServiceImpl implements PromptClientOperationSe
                     "Required parameter `promptKey` not present");
         }
         PromptVersionInfo result = promptOperationService.queryPrompt(namespaceId, promptKey, version, label);
-        String currentMd5 = MD5Utils.md5Hex(JacksonUtils.toJson(result), ENCODE_UTF8);
-        result.setMd5(currentMd5);
+        String currentMd5 = result.getMd5();
         if (StringUtils.isNotBlank(md5) && md5.equals(currentMd5)) {
             throw new NacosException(NacosException.NOT_MODIFIED, "prompt data is up to date");
         }

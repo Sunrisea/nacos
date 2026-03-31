@@ -16,6 +16,8 @@
 
 package com.alibaba.nacos.ai.config;
 
+import com.alibaba.nacos.api.ai.model.prompt.PromptVersionInfo;
+
 import java.util.List;
 
 /**
@@ -55,7 +57,7 @@ public interface PromptLegacyDataReader {
      *
      * @param promptKey prompt key
      * @param version   version string
-     * @return version content as JSON string, or null if not found
+     * @return version info with template/variables/srcUser/commitMsg, or null if not found
      */
-    String readVersionContent(String promptKey, String version);
+    PromptVersionInfo readVersionContent(String promptKey, String version);
 }

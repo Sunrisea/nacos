@@ -18,9 +18,11 @@ package com.alibaba.nacos.ai.config;
 
 import com.alibaba.nacos.ai.constant.Constants;
 import com.alibaba.nacos.ai.utils.PromptDataIdUtils;
+import com.alibaba.nacos.api.ai.model.prompt.PromptVersionInfo;
 import com.alibaba.nacos.api.model.Page;
 import com.alibaba.nacos.common.utils.JacksonUtils;
 import com.alibaba.nacos.common.utils.StringUtils;
+import com.alibaba.nacos.config.server.model.ConfigAllInfo;
 import com.alibaba.nacos.config.server.model.ConfigInfo;
 import com.alibaba.nacos.config.server.service.query.ConfigQueryChainService;
 import com.alibaba.nacos.config.server.service.query.model.ConfigQueryChainRequest;
@@ -84,13 +86,31 @@ public class NacosPromptLegacyDataReader implements PromptLegacyDataReader {
     }
     
     @Override
-    public String readVersionContent(String promptKey, String version) {
+    public PromptVersionInfo readVersionContent(String promptKey, String version) {
         String versionDataId = PromptDataIdUtils.buildVersionDataId(promptKey, version);
-        String content = readConfigContent(versionDataId);
-        if (StringUtils.isBlank(content)) {
-            content = readConfigContent(PromptDataIdUtils.buildLatestDataId(promptKey));
+        ConfigAllInfo configAllInfo = configInfoPersistService.findConfigAllInfo(versionDataId, PROMPT_GROUP,
+                DEFAULT_NAMESPACE);
+        if (configAllInfo == null || StringUtils.isBlank(configAllInfo.getContent())) {
+            return null;
         }
-        return content;
+        PromptVersionInfo info;
+        try {
+            info = JacksonUtils.toObj(configAllInfo.getContent(), PromptVersionInfo.class);
+        } catch (Exception e) {
+            info = new PromptVersionInfo();
+            info.setTemplate(configAllInfo.getContent());
+        }
+        info.setPromptKey(promptKey);
+        info.setVersion(version);
+        // Use Config table md5 if not already in content JSON
+        if (info.getMd5() == null && configAllInfo.getMd5() != null) {
+            info.setMd5(configAllInfo.getMd5());
+        }
+        // srcUser from createUser (Config advance info)
+        if (info.getSrcUser() == null && configAllInfo.getCreateUser() != null) {
+            info.setSrcUser(configAllInfo.getCreateUser());
+        }
+        return info;
     }
     
     private List<String> scanPromptKeys() {
