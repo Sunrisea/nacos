@@ -129,6 +129,11 @@ public class PromptNoopHandler implements PromptHandler {
     }
     
     @Override
+    public void updateDescription(String namespaceId, String promptKey, String description) throws NacosException {
+        throw notImplemented();
+    }
+    
+    @Override
     public void updateBizTags(String namespaceId, String promptKey, String bizTags) throws NacosException {
         throw notImplemented();
     }

@@ -18,6 +18,7 @@ package com.alibaba.nacos.console.controller.v3.ai;
 
 import com.alibaba.nacos.ai.constant.Constants;
 import com.alibaba.nacos.ai.form.prompt.PromptBizTagsUpdateForm;
+import com.alibaba.nacos.ai.form.prompt.PromptDescriptionUpdateForm;
 import com.alibaba.nacos.ai.form.prompt.PromptDraftCreateForm;
 import com.alibaba.nacos.ai.form.prompt.PromptDraftUpdateForm;
 import com.alibaba.nacos.ai.form.prompt.PromptForm;
@@ -241,6 +242,17 @@ public class ConsolePromptController {
         form.validate();
         Map<String, String> labels = JacksonUtils.toObj(form.getLabels(), Map.class);
         promptProxy.updateLabels(form.getNamespaceId(), form.getPromptKey(), labels);
+        return Result.success("ok");
+    }
+    
+    /**
+     * Update prompt description.
+     */
+    @PutMapping("/description")
+    @Secured(action = ActionTypes.WRITE, signType = SignType.AI, apiType = ApiType.CONSOLE_API)
+    public Result<String> updateDescription(PromptDescriptionUpdateForm form) throws NacosException {
+        form.validate();
+        promptProxy.updateDescription(form.getNamespaceId(), form.getPromptKey(), form.getDescription());
         return Result.success("ok");
     }
     
