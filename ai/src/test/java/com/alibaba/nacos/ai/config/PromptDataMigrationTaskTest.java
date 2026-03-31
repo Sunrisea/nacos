@@ -16,14 +16,14 @@
 
 package com.alibaba.nacos.ai.config;
 
+import com.alibaba.nacos.ai.config.NacosPromptLegacyDataReader.LegacyDescriptor;
+import com.alibaba.nacos.ai.config.NacosPromptLegacyDataReader.LegacyLabelVersionMapping;
 import com.alibaba.nacos.ai.model.AiResource;
 import com.alibaba.nacos.ai.model.AiResourceVersion;
 import com.alibaba.nacos.ai.service.prompt.PromptOperationService;
 import com.alibaba.nacos.ai.service.repository.AiResourcePersistService;
 import com.alibaba.nacos.ai.service.repository.AiResourceVersionPersistService;
 import com.alibaba.nacos.ai.utils.PromptDataIdUtils;
-import com.alibaba.nacos.api.ai.model.prompt.PromptDescriptor;
-import com.alibaba.nacos.api.ai.model.prompt.PromptLabelVersionMapping;
 import com.alibaba.nacos.api.ai.model.prompt.PromptVersionInfo;
 import com.alibaba.nacos.api.model.Page;
 import com.alibaba.nacos.common.utils.JacksonUtils;
@@ -178,9 +178,9 @@ class PromptDataMigrationTaskTest {
         when(aiResourcePersistService.find(NS, PROMPT_KEY, RESOURCE_TYPE_PROMPT))
                 .thenReturn(new AiResource());
         // All versions also exist in DB
-        PromptLabelVersionMapping mapping = new PromptLabelVersionMapping();
-        mapping.setPromptKey(PROMPT_KEY);
-        mapping.setVersions(Collections.singletonList("0.0.1"));
+        LegacyLabelVersionMapping mapping = new LegacyLabelVersionMapping();
+        mapping.promptKey = PROMPT_KEY;
+        mapping.versions = Collections.singletonList("0.0.1");
         ConfigQueryChainResponse mappingResp = new ConfigQueryChainResponse();
         mappingResp.setStatus(ConfigQueryChainResponse.ConfigQueryStatus.CONFIG_FOUND_FORMAL);
         mappingResp.setContent(JacksonUtils.toJson(mapping));
@@ -208,18 +208,18 @@ class PromptDataMigrationTaskTest {
         // 3. Marker creation succeeds (no exception from publishConfig)
         
         // 4. Config reads: descriptor + mapping + version content
-        PromptDescriptor descriptor = new PromptDescriptor();
-        descriptor.setPromptKey(PROMPT_KEY);
-        descriptor.setDescription("test desc");
-        descriptor.setBizTags(Arrays.asList("tag1"));
+        LegacyDescriptor descriptor = new LegacyDescriptor();
+        descriptor.promptKey = PROMPT_KEY;
+        descriptor.description = "test desc";
+        descriptor.bizTags = Arrays.asList("tag1");
         
-        PromptLabelVersionMapping mapping = new PromptLabelVersionMapping();
-        mapping.setPromptKey(PROMPT_KEY);
-        mapping.setVersions(Collections.singletonList("0.0.1"));
-        mapping.setLatestVersion("0.0.1");
+        LegacyLabelVersionMapping mapping = new LegacyLabelVersionMapping();
+        mapping.promptKey = PROMPT_KEY;
+        mapping.versions = Collections.singletonList("0.0.1");
+        mapping.latestVersion = "0.0.1";
         Map<String, String> labels = new HashMap<>();
         labels.put("latest", "0.0.1");
-        mapping.setLabels(labels);
+        mapping.labels = labels;
         
         PromptVersionInfo versionContent = new PromptVersionInfo();
         versionContent.setPromptKey(PROMPT_KEY);
@@ -296,10 +296,10 @@ class PromptDataMigrationTaskTest {
         when(aiResourcePersistService.find(NS, PROMPT_KEY, RESOURCE_TYPE_PROMPT))
                 .thenReturn(null);
         
-        PromptLabelVersionMapping mapping = new PromptLabelVersionMapping();
-        mapping.setPromptKey(PROMPT_KEY);
-        mapping.setVersions(Collections.singletonList("0.0.1"));
-        mapping.setLatestVersion("0.0.1");
+        LegacyLabelVersionMapping mapping = new LegacyLabelVersionMapping();
+        mapping.promptKey = PROMPT_KEY;
+        mapping.versions = Collections.singletonList("0.0.1");
+        mapping.latestVersion = "0.0.1";
         
         when(configQueryChainService.handle(any())).thenAnswer(invocation -> {
             com.alibaba.nacos.config.server.service.query.model.ConfigQueryChainRequest req = invocation.getArgument(0);
@@ -309,8 +309,8 @@ class PromptDataMigrationTaskTest {
             if (dataId != null && dataId.endsWith(".label-version-mapping.json")) {
                 resp.setContent(JacksonUtils.toJson(mapping));
             } else if (dataId != null && dataId.endsWith(".descriptor.json")) {
-                PromptDescriptor desc = new PromptDescriptor();
-                desc.setPromptKey(PROMPT_KEY);
+                LegacyDescriptor desc = new LegacyDescriptor();
+                desc.promptKey = PROMPT_KEY;
                 resp.setContent(JacksonUtils.toJson(desc));
             } else {
                 resp.setContent("{}");
@@ -361,9 +361,9 @@ class PromptDataMigrationTaskTest {
         when(aiResourcePersistService.find(NS, PROMPT_KEY, RESOURCE_TYPE_PROMPT)).thenReturn(null);
         
         // Mapping with no versions
-        PromptLabelVersionMapping mapping = new PromptLabelVersionMapping();
-        mapping.setPromptKey(PROMPT_KEY);
-        mapping.setVersions(new ArrayList<>());
+        LegacyLabelVersionMapping mapping = new LegacyLabelVersionMapping();
+        mapping.promptKey = PROMPT_KEY;
+        mapping.versions = new ArrayList<>();
         
         when(configQueryChainService.handle(any())).thenAnswer(invocation -> {
             com.alibaba.nacos.config.server.service.query.model.ConfigQueryChainRequest req = invocation.getArgument(0);

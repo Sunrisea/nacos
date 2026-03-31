@@ -22,8 +22,6 @@ import com.alibaba.nacos.ai.service.prompt.PromptOperationService;
 import com.alibaba.nacos.ai.service.repository.AiResourcePersistService;
 import com.alibaba.nacos.ai.service.repository.AiResourceVersionPersistService;
 import com.alibaba.nacos.ai.storage.NacosConfigAiResourceStorage;
-import com.alibaba.nacos.api.ai.model.prompt.PromptDescriptor;
-import com.alibaba.nacos.api.ai.model.prompt.PromptLabelVersionMapping;
 import com.alibaba.nacos.api.ai.model.prompt.PromptUtils;
 import com.alibaba.nacos.api.ai.model.prompt.PromptVersionInfo;
 import com.alibaba.nacos.api.exception.NacosException;
@@ -59,12 +57,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Migrates prompt data from legacy storage to the new DB + SPI typed storage architecture.
  *
- * <p>Uses {@link PromptLegacyDataReader} SPI to read legacy data. The default implementation
- * ({@code nacos}) reads from Nacos Config ({@code nacos-ai-prompt} group). Commercial
- * environments can provide their own {@code @Component} implementing {@link PromptLegacyDataReader}.</p>
- *
- * <p>The active reader is selected by configuration property
- * {@code nacos.ai.prompt.migration.provider} (default: {@code nacos}).</p>
+ * <p>Uses {@link PromptLegacyDataReader} to read legacy data. The active reader is selected
+ * by {@code nacos.ai.prompt.migration.provider} (default: {@code nacos}).</p>
  *
  * @author nacos
  */
@@ -160,15 +154,15 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
                 return;
             }
             
-            List<String> promptKeys = reader.scanLegacyPromptKeys();
-            if (promptKeys.isEmpty()) {
+            List<LegacyPromptData> allPrompts = reader.scanLegacyPrompts();
+            if (allPrompts.isEmpty()) {
                 LOGGER.info("No legacy prompt data found by reader '{}', skip migration", reader.type());
                 return;
             }
             
-            List<String> needsMigration = filterNeedsMigration(promptKeys, reader);
+            List<LegacyPromptData> needsMigration = filterNeedsMigration(allPrompts);
             if (needsMigration.isEmpty()) {
-                LOGGER.info("All {} legacy prompts already migrated, skip", promptKeys.size());
+                LOGGER.info("All {} legacy prompts already migrated, skip", allPrompts.size());
                 return;
             }
             
@@ -178,29 +172,29 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
                 return;
             }
             
-            needsMigration = filterNeedsMigration(promptKeys, reader);
+            needsMigration = filterNeedsMigration(allPrompts);
             if (needsMigration.isEmpty()) {
                 LOGGER.info("All legacy prompts already migrated after acquiring marker");
                 return;
             }
             
-            LOGGER.info("Start prompt data migration: {} prompts to migrate out of {} total", needsMigration.size(),
-                    promptKeys.size());
+            LOGGER.info("Start prompt data migration: {} prompts to migrate out of {} total",
+                    needsMigration.size(), allPrompts.size());
             
             int migrated = 0;
             int failed = 0;
-            for (String promptKey : needsMigration) {
+            for (LegacyPromptData prompt : needsMigration) {
                 try {
-                    migrateOnePrompt(promptKey, reader);
+                    migrateOnePrompt(prompt, reader);
                     migrated++;
                 } catch (Exception e) {
                     failed++;
-                    LOGGER.error("Failed to migrate prompt '{}': {}", promptKey, e.getMessage(), e);
+                    LOGGER.error("Failed to migrate prompt '{}': {}", prompt.getPromptKey(), e.getMessage(), e);
                 }
             }
             
-            LOGGER.info("Prompt data migration completed: migrated={}, failed={}, skipped={}", migrated, failed,
-                    promptKeys.size() - needsMigration.size());
+            LOGGER.info("Prompt data migration completed: migrated={}, failed={}, skipped={}",
+                    migrated, failed, allPrompts.size() - needsMigration.size());
         } catch (Exception e) {
             LOGGER.error("Prompt data migration failed unexpectedly", e);
         } finally {
@@ -210,60 +204,53 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         }
     }
     
-    private List<String> filterNeedsMigration(List<String> promptKeys, PromptLegacyDataReader reader) {
+    private List<LegacyPromptData> filterNeedsMigration(List<LegacyPromptData> allPrompts) {
         String namespace = com.alibaba.nacos.api.common.Constants.DEFAULT_NAMESPACE_ID;
-        List<String> result = new ArrayList<>();
-        for (String promptKey : promptKeys) {
-            AiResource existing = aiResourcePersistService.find(namespace, promptKey, RESOURCE_TYPE_PROMPT);
+        List<LegacyPromptData> result = new ArrayList<>();
+        for (LegacyPromptData prompt : allPrompts) {
+            AiResource existing = aiResourcePersistService.find(namespace, prompt.getPromptKey(), RESOURCE_TYPE_PROMPT);
             if (existing == null) {
-                result.add(promptKey);
+                result.add(prompt);
                 continue;
             }
-            PromptLabelVersionMapping mapping = reader.readLabelVersionMapping(promptKey);
-            if (mapping == null || mapping.getVersions() == null) {
-                continue;
-            }
-            for (String version : mapping.getVersions()) {
-                AiResourceVersion versionRow = aiResourceVersionPersistService.find(namespace, promptKey,
-                        RESOURCE_TYPE_PROMPT, version);
-                if (versionRow == null) {
-                    result.add(promptKey);
-                    break;
+            if (prompt.getVersions() != null) {
+                for (String version : prompt.getVersions()) {
+                    AiResourceVersion versionRow = aiResourceVersionPersistService.find(namespace,
+                            prompt.getPromptKey(), RESOURCE_TYPE_PROMPT, version);
+                    if (versionRow == null) {
+                        result.add(prompt);
+                        break;
+                    }
                 }
             }
         }
         return result;
     }
     
-    private void migrateOnePrompt(String promptKey, PromptLegacyDataReader reader) throws Exception {
+    private void migrateOnePrompt(LegacyPromptData prompt, PromptLegacyDataReader reader) throws Exception {
         String namespace = com.alibaba.nacos.api.common.Constants.DEFAULT_NAMESPACE_ID;
+        String promptKey = prompt.getPromptKey();
         
-        PromptDescriptor descriptor = reader.readDescriptor(promptKey);
-        PromptLabelVersionMapping mapping = reader.readLabelVersionMapping(promptKey);
-        
-        if (mapping == null || mapping.getVersions() == null || mapping.getVersions().isEmpty()) {
-            LOGGER.warn("Prompt '{}' has no versions in mapping, skip migration", promptKey);
+        if (prompt.getVersions() == null || prompt.getVersions().isEmpty()) {
+            LOGGER.warn("Prompt '{}' has no versions, skip migration", promptKey);
             return;
         }
         
-        String description = descriptor != null ? descriptor.getDescription() : null;
-        List<String> bizTags = descriptor != null ? descriptor.getBizTags() : null;
-        
         Map<String, Object> versionInfoMap = new HashMap<>(8);
-        versionInfoMap.put("labels", mapping.getLabels() != null ? mapping.getLabels() : new HashMap<>());
+        versionInfoMap.put("labels", prompt.getLabels() != null ? prompt.getLabels() : new HashMap<>());
         versionInfoMap.put("editingVersion", null);
         versionInfoMap.put("reviewingVersion", null);
-        versionInfoMap.put("onlineCnt", mapping.getVersions().size());
+        versionInfoMap.put("onlineCnt", prompt.getVersions().size());
         
         AiResource resource = new AiResource();
         resource.setNamespaceId(namespace);
         resource.setName(promptKey);
         resource.setType(RESOURCE_TYPE_PROMPT);
-        resource.setDesc(description);
+        resource.setDesc(prompt.getDescription());
         resource.setStatus(META_STATUS_ENABLE);
         resource.setMetaVersion(1L);
         resource.setVersionInfo(JacksonUtils.toJson(versionInfoMap));
-        resource.setBizTags(bizTags != null ? JacksonUtils.toJson(bizTags) : "[]");
+        resource.setBizTags(prompt.getBizTags() != null ? JacksonUtils.toJson(prompt.getBizTags()) : "[]");
         
         try {
             aiResourcePersistService.insert(resource);
@@ -278,12 +265,13 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         }
         
         int versionsMigrated = 0;
-        for (String version : mapping.getVersions()) {
+        for (String version : prompt.getVersions()) {
             try {
-                migrateOneVersion(namespace, promptKey, version, mapping, reader);
+                migrateOneVersion(namespace, promptKey, version, reader);
                 versionsMigrated++;
             } catch (Exception e) {
-                LOGGER.error("Failed to migrate prompt '{}' version '{}': {}", promptKey, version, e.getMessage(), e);
+                LOGGER.error("Failed to migrate prompt '{}' version '{}': {}", promptKey, version,
+                        e.getMessage(), e);
             }
         }
         
@@ -293,17 +281,19 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
             LOGGER.warn("Failed to refresh legacy mirror for prompt '{}': {}", promptKey, e.getMessage());
         }
         
-        LOGGER.info("Migrated prompt '{}': {}/{} versions", promptKey, versionsMigrated, mapping.getVersions().size());
+        LOGGER.info("Migrated prompt '{}': {}/{} versions", promptKey, versionsMigrated,
+                prompt.getVersions().size());
     }
     
     private void migrateOneVersion(String namespace, String promptKey, String version,
-            PromptLabelVersionMapping mapping, PromptLegacyDataReader reader) throws Exception {
-        String content = reader.readVersionContent(promptKey, version, mapping);
+            PromptLegacyDataReader reader) throws Exception {
+        String content = reader.readVersionContent(promptKey, version);
         if (StringUtils.isBlank(content)) {
             LOGGER.warn("No content found for prompt '{}' version '{}', skip", promptKey, version);
             return;
         }
         
+        // Write to typed storage FIRST (idempotent overwrite)
         PromptVersionInfo versionInfo;
         try {
             versionInfo = JacksonUtils.toObj(content, PromptVersionInfo.class);
@@ -315,11 +305,11 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         }
         versionInfo.setPromptKey(promptKey);
         versionInfo.setVersion(version);
-        
         writeToTypedStorage(namespace, promptKey, version, versionInfo);
         
-        AiResourceVersion existing = aiResourceVersionPersistService.find(namespace, promptKey, RESOURCE_TYPE_PROMPT,
-                version);
+        // Then create DB record (idempotent: skip if exists)
+        AiResourceVersion existing = aiResourceVersionPersistService.find(namespace, promptKey,
+                RESOURCE_TYPE_PROMPT, version);
         if (existing != null) {
             LOGGER.debug("Prompt '{}' version '{}' already in DB, skip insert", promptKey, version);
             return;
@@ -338,15 +328,14 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         try {
             aiResourceVersionPersistService.insert(versionRecord);
         } catch (Exception e) {
-            AiResourceVersion check = aiResourceVersionPersistService.find(namespace, promptKey, RESOURCE_TYPE_PROMPT,
-                    version);
+            AiResourceVersion check = aiResourceVersionPersistService.find(namespace, promptKey,
+                    RESOURCE_TYPE_PROMPT, version);
             if (check != null) {
                 LOGGER.debug("Prompt '{}' version '{}' inserted by another node, skip", promptKey, version);
             } else {
                 throw e;
             }
         }
-        
         LOGGER.debug("Migrated prompt '{}' version '{}'", promptKey, version);
     }
     
@@ -405,8 +394,8 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         }
     }
     
-    private void writeToTypedStorage(String namespace, String promptKey, String version, PromptVersionInfo versionInfo)
-            throws NacosException {
+    private void writeToTypedStorage(String namespace, String promptKey, String version,
+            PromptVersionInfo versionInfo) throws NacosException {
         String provider = resolveStorageProvider();
         byte[] contentBytes = JacksonUtils.toJson(versionInfo).getBytes(StandardCharsets.UTF_8);
         StorageKey storageKey = NacosConfigAiResourceStorage.buildStorageKey(provider, namespace,

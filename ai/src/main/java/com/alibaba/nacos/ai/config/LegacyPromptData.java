@@ -14,42 +14,32 @@
  * limitations under the License.
  */
 
-package com.alibaba.nacos.api.ai.model.prompt;
+package com.alibaba.nacos.ai.config;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Prompt runtime label/version mapping information.
+ * Unified legacy prompt data for migration. Holds prompt metadata and version list
+ * (without version content, which is loaded on demand via
+ * {@link PromptLegacyDataReader#readVersionContent}).
  *
  * @author nacos
+ * @since 3.2.0
  */
-public class PromptLabelVersionMapping implements Serializable {
-    
-    private static final long serialVersionUID = 1L;
-    
-    private int schemaVersion = 1;
+public class LegacyPromptData {
     
     private String promptKey;
     
-    private List<String> versions = new ArrayList<>();
+    private String description;
     
-    private Map<String, String> labels = new HashMap<>();
+    private List<String> bizTags;
+    
+    private Map<String, String> labels;
     
     private String latestVersion;
     
-    private Long gmtModified;
-    
-    public int getSchemaVersion() {
-        return schemaVersion;
-    }
-    
-    public void setSchemaVersion(int schemaVersion) {
-        this.schemaVersion = schemaVersion;
-    }
+    private List<String> versions;
     
     public String getPromptKey() {
         return promptKey;
@@ -59,12 +49,20 @@ public class PromptLabelVersionMapping implements Serializable {
         this.promptKey = promptKey;
     }
     
-    public List<String> getVersions() {
-        return versions;
+    public String getDescription() {
+        return description;
     }
     
-    public void setVersions(List<String> versions) {
-        this.versions = versions;
+    public void setDescription(String description) {
+        this.description = description;
+    }
+    
+    public List<String> getBizTags() {
+        return bizTags;
+    }
+    
+    public void setBizTags(List<String> bizTags) {
+        this.bizTags = bizTags;
     }
     
     public Map<String, String> getLabels() {
@@ -83,11 +81,11 @@ public class PromptLabelVersionMapping implements Serializable {
         this.latestVersion = latestVersion;
     }
     
-    public Long getGmtModified() {
-        return gmtModified;
+    public List<String> getVersions() {
+        return versions;
     }
     
-    public void setGmtModified(Long gmtModified) {
-        this.gmtModified = gmtModified;
+    public void setVersions(List<String> versions) {
+        this.versions = versions;
     }
 }

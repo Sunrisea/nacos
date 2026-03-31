@@ -18,8 +18,6 @@ package com.alibaba.nacos.ai.config;
 
 import com.alibaba.nacos.ai.constant.Constants;
 import com.alibaba.nacos.ai.utils.PromptDataIdUtils;
-import com.alibaba.nacos.api.ai.model.prompt.PromptDescriptor;
-import com.alibaba.nacos.api.ai.model.prompt.PromptLabelVersionMapping;
 import com.alibaba.nacos.api.model.Page;
 import com.alibaba.nacos.common.utils.JacksonUtils;
 import com.alibaba.nacos.common.utils.StringUtils;
@@ -33,7 +31,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Default {@link PromptLegacyDataReader} for open-source Nacos.
@@ -71,7 +71,29 @@ public class NacosPromptLegacyDataReader implements PromptLegacyDataReader {
     }
     
     @Override
-    public List<String> scanLegacyPromptKeys() {
+    public List<LegacyPromptData> scanLegacyPrompts() {
+        List<String> promptKeys = scanPromptKeys();
+        List<LegacyPromptData> result = new ArrayList<>();
+        for (String promptKey : promptKeys) {
+            LegacyPromptData data = buildLegacyPromptData(promptKey);
+            if (data != null) {
+                result.add(data);
+            }
+        }
+        return result;
+    }
+    
+    @Override
+    public String readVersionContent(String promptKey, String version) {
+        String versionDataId = PromptDataIdUtils.buildVersionDataId(promptKey, version);
+        String content = readConfigContent(versionDataId);
+        if (StringUtils.isBlank(content)) {
+            content = readConfigContent(PromptDataIdUtils.buildLatestDataId(promptKey));
+        }
+        return content;
+    }
+    
+    private List<String> scanPromptKeys() {
         List<String> promptKeys = new ArrayList<>();
         int pageNo = 1;
         while (true) {
@@ -96,25 +118,25 @@ public class NacosPromptLegacyDataReader implements PromptLegacyDataReader {
         return promptKeys;
     }
     
-    @Override
-    public PromptDescriptor readDescriptor(String promptKey) {
-        return readConfigJson(PromptDataIdUtils.buildDescriptorDataId(promptKey), PromptDescriptor.class);
-    }
-    
-    @Override
-    public PromptLabelVersionMapping readLabelVersionMapping(String promptKey) {
-        return readConfigJson(PromptDataIdUtils.buildLabelVersionMappingDataId(promptKey),
-                PromptLabelVersionMapping.class);
-    }
-    
-    @Override
-    public String readVersionContent(String promptKey, String version, PromptLabelVersionMapping mapping) {
-        String versionDataId = PromptDataIdUtils.buildVersionDataId(promptKey, version);
-        String content = readConfigContent(versionDataId);
-        if (StringUtils.isBlank(content) && mapping != null && version.equals(mapping.getLatestVersion())) {
-            content = readConfigContent(PromptDataIdUtils.buildLatestDataId(promptKey));
+    private LegacyPromptData buildLegacyPromptData(String promptKey) {
+        LegacyDescriptor descriptor = readConfigJson(
+                PromptDataIdUtils.buildDescriptorDataId(promptKey), LegacyDescriptor.class);
+        LegacyLabelVersionMapping mapping = readConfigJson(
+                PromptDataIdUtils.buildLabelVersionMappingDataId(promptKey), LegacyLabelVersionMapping.class);
+        
+        if (mapping == null || mapping.versions == null || mapping.versions.isEmpty()) {
+            LOGGER.warn("Prompt '{}' has no versions in mapping, skip", promptKey);
+            return null;
         }
-        return content;
+        
+        LegacyPromptData data = new LegacyPromptData();
+        data.setPromptKey(promptKey);
+        data.setDescription(descriptor != null ? descriptor.description : null);
+        data.setBizTags(descriptor != null ? descriptor.bizTags : null);
+        data.setLabels(mapping.labels != null ? mapping.labels : new HashMap<>());
+        data.setLatestVersion(mapping.latestVersion);
+        data.setVersions(mapping.versions);
+        return data;
     }
     
     private <T> T readConfigJson(String dataId, Class<T> clazz) {
@@ -143,5 +165,41 @@ public class NacosPromptLegacyDataReader implements PromptLegacyDataReader {
             LOGGER.warn("Failed to read config '{}': {}", dataId, e.getMessage());
             return null;
         }
+    }
+    
+    // ========== Legacy Config JSON structures (for deserialization only) ==========
+    
+    /**
+     * Legacy prompt descriptor stored in Config as {promptKey}.descriptor.json.
+     */
+    static class LegacyDescriptor {
+        
+        public int schemaVersion = 1;
+        
+        public String promptKey;
+        
+        public String description;
+        
+        public List<String> bizTags = new ArrayList<>();
+        
+        public Long gmtModified;
+    }
+    
+    /**
+     * Legacy prompt label/version mapping stored in Config as {promptKey}.label-version-mapping.json.
+     */
+    static class LegacyLabelVersionMapping {
+        
+        public int schemaVersion = 1;
+        
+        public String promptKey;
+        
+        public List<String> versions = new ArrayList<>();
+        
+        public Map<String, String> labels = new HashMap<>();
+        
+        public String latestVersion;
+        
+        public Long gmtModified;
     }
 }
