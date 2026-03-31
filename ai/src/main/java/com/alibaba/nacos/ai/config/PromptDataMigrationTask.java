@@ -230,15 +230,31 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
     }
     
     /**
-     * Filter prompts that haven't been migrated yet (no ai_resource record in DB).
+     * Filter prompts that have unmigrated versions. A prompt needs migration if its ai_resource record is missing OR
+     * if any version in the legacy mapping has no corresponding ai_resource_version row in DB.
      */
     private List<String> filterNeedsMigration(List<String> promptKeys) {
+        String namespace = com.alibaba.nacos.api.common.Constants.DEFAULT_NAMESPACE_ID;
         List<String> result = new ArrayList<>();
         for (String promptKey : promptKeys) {
-            AiResource existing = aiResourcePersistService.find(
-                    com.alibaba.nacos.api.common.Constants.DEFAULT_NAMESPACE_ID, promptKey, RESOURCE_TYPE_PROMPT);
+            AiResource existing = aiResourcePersistService.find(namespace, promptKey, RESOURCE_TYPE_PROMPT);
             if (existing == null) {
                 result.add(promptKey);
+                continue;
+            }
+            // ai_resource exists, but check if all versions are migrated
+            PromptLabelVersionMapping mapping = readConfigJson(
+                    PromptDataIdUtils.buildLabelVersionMappingDataId(promptKey), PromptLabelVersionMapping.class);
+            if (mapping == null || mapping.getVersions() == null) {
+                continue;
+            }
+            for (String version : mapping.getVersions()) {
+                AiResourceVersion versionRow = aiResourceVersionPersistService.find(namespace, promptKey,
+                        RESOURCE_TYPE_PROMPT, version);
+                if (versionRow == null) {
+                    result.add(promptKey);
+                    break;
+                }
             }
         }
         return result;
@@ -263,7 +279,7 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
             return;
         }
         
-        // 3. Create ai_resource in DB
+        // 3. Create ai_resource in DB (idempotent: skip if already exists)
         String description = descriptor != null ? descriptor.getDescription() : null;
         List<String> bizTags = descriptor != null ? descriptor.getBizTags() : null;
         
@@ -271,6 +287,7 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         versionInfoMap.put("labels", mapping.getLabels() != null ? mapping.getLabels() : new HashMap<>());
         versionInfoMap.put("editingVersion", null);
         versionInfoMap.put("reviewingVersion", null);
+        versionInfoMap.put("onlineCnt", mapping.getVersions().size());
         
         AiResource resource = new AiResource();
         resource.setNamespaceId(namespace);
@@ -280,12 +297,22 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         resource.setStatus(META_STATUS_ENABLE);
         resource.setMetaVersion(1L);
         resource.setVersionInfo(JacksonUtils.toJson(versionInfoMap));
-        resource.setBizTags(bizTags != null ? String.join(",", bizTags) : "");
+        resource.setBizTags(bizTags != null ? JacksonUtils.toJson(bizTags) : "[]");
         
-        aiResourcePersistService.insert(resource);
-        LOGGER.info("Migrated prompt '{}' resource record to DB", promptKey);
+        try {
+            aiResourcePersistService.insert(resource);
+            LOGGER.info("Migrated prompt '{}' resource record to DB", promptKey);
+        } catch (Exception e) {
+            // Unique constraint violation means another node already inserted — safe to continue
+            AiResource existing = aiResourcePersistService.find(namespace, promptKey, RESOURCE_TYPE_PROMPT);
+            if (existing != null) {
+                LOGGER.info("Prompt '{}' resource record already exists, continue with version migration", promptKey);
+            } else {
+                throw e;
+            }
+        }
         
-        // 4. For each version: read content + create version record + write to typed storage
+        // 4. For each version: write to typed storage first, then create version record in DB
         int versionsMigrated = 0;
         for (String version : mapping.getVersions()) {
             try {
@@ -311,14 +338,6 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
      */
     private void migrateOneVersion(String namespace, String promptKey, String version,
             PromptLabelVersionMapping mapping) throws Exception {
-        // Idempotency: skip if version already exists in DB
-        AiResourceVersion existing = aiResourceVersionPersistService.find(namespace, promptKey, RESOURCE_TYPE_PROMPT,
-                version);
-        if (existing != null) {
-            LOGGER.debug("Prompt '{}' version '{}' already migrated, skip", promptKey, version);
-            return;
-        }
-        
         // Read version content from old Config
         String versionDataId = PromptDataIdUtils.buildVersionDataId(promptKey, version);
         String content = readConfigContent(versionDataId);
@@ -333,21 +352,7 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
             }
         }
         
-        // Create version record in DB
-        AiResourceVersion versionRecord = new AiResourceVersion();
-        versionRecord.setNamespaceId(namespace);
-        versionRecord.setName(promptKey);
-        versionRecord.setType(RESOURCE_TYPE_PROMPT);
-        versionRecord.setVersion(version);
-        versionRecord.setStatus(VERSION_STATUS_ONLINE);
-        versionRecord.setAuthor("-");
-        versionRecord.setDesc("migrated from legacy config");
-        String storageJson = buildStorageJson(namespace, promptKey, version);
-        versionRecord.setStorage(storageJson);
-        
-        aiResourceVersionPersistService.insert(versionRecord);
-        
-        // Write content to typed storage
+        // Write content to typed storage FIRST (idempotent: overwrites if exists)
         PromptVersionInfo versionInfo;
         try {
             versionInfo = JacksonUtils.toObj(content, PromptVersionInfo.class);
@@ -362,6 +367,38 @@ public class PromptDataMigrationTask implements ApplicationListener<ApplicationR
         versionInfo.setVersion(version);
         
         writeToTypedStorage(namespace, promptKey, version, versionInfo);
+        
+        // Then create version record in DB (idempotent: skip if already exists via unique constraint)
+        AiResourceVersion existing = aiResourceVersionPersistService.find(namespace, promptKey, RESOURCE_TYPE_PROMPT,
+                version);
+        if (existing != null) {
+            LOGGER.debug("Prompt '{}' version '{}' already in DB, skip insert", promptKey, version);
+            return;
+        }
+        
+        AiResourceVersion versionRecord = new AiResourceVersion();
+        versionRecord.setNamespaceId(namespace);
+        versionRecord.setName(promptKey);
+        versionRecord.setType(RESOURCE_TYPE_PROMPT);
+        versionRecord.setVersion(version);
+        versionRecord.setStatus(VERSION_STATUS_ONLINE);
+        versionRecord.setAuthor("-");
+        versionRecord.setDesc("migrated from legacy config");
+        String storageJson = buildStorageJson(namespace, promptKey, version);
+        versionRecord.setStorage(storageJson);
+        
+        try {
+            aiResourceVersionPersistService.insert(versionRecord);
+        } catch (Exception e) {
+            // Unique constraint violation means another node already inserted — safe to ignore
+            AiResourceVersion check = aiResourceVersionPersistService.find(namespace, promptKey, RESOURCE_TYPE_PROMPT,
+                    version);
+            if (check != null) {
+                LOGGER.debug("Prompt '{}' version '{}' inserted by another node, skip", promptKey, version);
+            } else {
+                throw e;
+            }
+        }
         
         LOGGER.debug("Migrated prompt '{}' version '{}'", promptKey, version);
     }

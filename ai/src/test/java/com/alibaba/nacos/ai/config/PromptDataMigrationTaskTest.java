@@ -165,13 +165,25 @@ class PromptDataMigrationTaskTest {
     }
     
     @Test
-    void testShouldSkipWhenAllAlreadyMigrated() {
+    void testShouldSkipWhenAllAlreadyMigrated() throws Exception {
         Page<ConfigInfo> scanPage = buildScanPage(PROMPT_KEY);
         when(configInfoPersistService.findConfigInfo4Page(eq(1), eq(100), any(), eq(PROMPT_GROUP), eq(NS), any()))
                 .thenReturn(scanPage);
-        // Already migrated: ai_resource record exists
+        // ai_resource record exists
         when(aiResourcePersistService.find(NS, PROMPT_KEY, RESOURCE_TYPE_PROMPT))
                 .thenReturn(new AiResource());
+        // All versions also exist in DB
+        PromptLabelVersionMapping mapping = new PromptLabelVersionMapping();
+        mapping.setPromptKey(PROMPT_KEY);
+        mapping.setVersions(Collections.singletonList("0.0.1"));
+        ConfigQueryChainResponse mappingResp = new ConfigQueryChainResponse();
+        mappingResp.setStatus(ConfigQueryChainResponse.ConfigQueryStatus.CONFIG_FOUND_FORMAL);
+        mappingResp.setContent(JacksonUtils.toJson(mapping));
+        when(configQueryChainService.handle(any())).thenReturn(mappingResp);
+        AiResourceVersion existingVersion = new AiResourceVersion();
+        existingVersion.setVersion("0.0.1");
+        when(aiResourceVersionPersistService.find(NS, PROMPT_KEY, RESOURCE_TYPE_PROMPT, "0.0.1"))
+                .thenReturn(existingVersion);
         
         task.onApplicationEvent(createRootContextEvent());
         
@@ -271,11 +283,13 @@ class PromptDataMigrationTaskTest {
     }
     
     @Test
-    void testMigrateOneVersionShouldSkipWhenAlreadyExists() throws Exception {
+    void testMigrateOneVersionShouldSkipDbInsertWhenAlreadyExists() throws Exception {
         Page<ConfigInfo> scanPage = buildScanPage(PROMPT_KEY);
         when(configInfoPersistService.findConfigInfo4Page(eq(1), eq(100), any(), eq(PROMPT_GROUP), eq(NS), any()))
                 .thenReturn(scanPage);
-        when(aiResourcePersistService.find(NS, PROMPT_KEY, RESOURCE_TYPE_PROMPT)).thenReturn(null);
+        // First call: ai_resource not found (needs migration); after insert: found
+        when(aiResourcePersistService.find(NS, PROMPT_KEY, RESOURCE_TYPE_PROMPT))
+                .thenReturn(null);
         
         PromptLabelVersionMapping mapping = new PromptLabelVersionMapping();
         mapping.setPromptKey(PROMPT_KEY);
@@ -299,7 +313,7 @@ class PromptDataMigrationTaskTest {
             return resp;
         });
         
-        // Version already exists in DB (idempotent skip)
+        // Version already exists in DB — DB insert should be skipped, but storage write still happens
         AiResourceVersion existingVersion = new AiResourceVersion();
         existingVersion.setVersion("0.0.1");
         when(aiResourceVersionPersistService.find(NS, PROMPT_KEY, RESOURCE_TYPE_PROMPT, "0.0.1"))
@@ -307,8 +321,11 @@ class PromptDataMigrationTaskTest {
         
         task.onApplicationEvent(createRootContextEvent());
         
-        // Meta should still be inserted, but version insert should be skipped
+        // Meta should still be inserted
         verify(aiResourcePersistService, timeout(ASYNC_TIMEOUT)).insert(any(AiResource.class));
+        // Storage write still happens (idempotent overwrite)
+        verify(storage, timeout(ASYNC_TIMEOUT)).save(any(StorageKey.class), any(byte[].class));
+        // But version DB insert should be skipped
         verify(aiResourceVersionPersistService, after(ASYNC_TIMEOUT).never()).insert(any(AiResourceVersion.class));
     }
     
