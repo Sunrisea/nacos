@@ -74,6 +74,8 @@ public class Constants {
         public static final String AI_PROMPT_VERSION_DETAIL_ADMIN_PATH = AI_PROMPT_ADMIN_PATH + "/version";
         
         public static final String AI_PROMPT_BIZ_TAGS_ADMIN_PATH = AI_PROMPT_ADMIN_PATH + "/biz-tags";
+        
+        public static final String AI_PROMPT_DESCRIPTION_ADMIN_PATH = AI_PROMPT_ADMIN_PATH + "/description";
 
         public static final String CORE_PLUGIN_ADMIN_PATH = "/v3/admin/core/plugin";
         

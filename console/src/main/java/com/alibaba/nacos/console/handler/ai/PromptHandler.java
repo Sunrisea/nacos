@@ -111,6 +111,11 @@ public interface PromptHandler {
     void updateLabels(String namespaceId, String promptKey, Map<String, String> labels) throws NacosException;
     
     /**
+     * Update prompt description.
+     */
+    void updateDescription(String namespaceId, String promptKey, String description) throws NacosException;
+    
+    /**
      * Update biz tags.
      */
     void updateBizTags(String namespaceId, String promptKey, String bizTags) throws NacosException;

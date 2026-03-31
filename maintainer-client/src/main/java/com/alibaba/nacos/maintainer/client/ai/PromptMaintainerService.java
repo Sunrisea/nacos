@@ -230,6 +230,16 @@ public interface PromptMaintainerService {
     void updateLabels(String namespaceId, String promptKey, String labels) throws NacosException;
     
     /**
+     * Update prompt description.
+     *
+     * @param namespaceId namespace ID
+     * @param promptKey   prompt key
+     * @param description new description
+     * @throws NacosException if fail to update description
+     */
+    void updateDescription(String namespaceId, String promptKey, String description) throws NacosException;
+    
+    /**
      * Update biz tags.
      *
      * @param namespaceId namespace ID

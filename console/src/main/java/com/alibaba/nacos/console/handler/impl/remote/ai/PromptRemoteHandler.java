@@ -141,6 +141,11 @@ public class PromptRemoteHandler implements PromptHandler {
     }
     
     @Override
+    public void updateDescription(String namespaceId, String promptKey, String description) throws NacosException {
+        clientHolder.getAiMaintainerService().prompt().updateDescription(namespaceId, promptKey, description);
+    }
+    
+    @Override
     public void updateBizTags(String namespaceId, String promptKey, String bizTags) throws NacosException {
         clientHolder.getAiMaintainerService().prompt().updateBizTags(namespaceId, promptKey, bizTags);
     }

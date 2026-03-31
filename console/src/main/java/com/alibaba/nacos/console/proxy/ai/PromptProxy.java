@@ -110,6 +110,10 @@ public class PromptProxy {
         promptHandler.updateLabels(namespaceId, promptKey, labels);
     }
     
+    public void updateDescription(String namespaceId, String promptKey, String description) throws NacosException {
+        promptHandler.updateDescription(namespaceId, promptKey, description);
+    }
+    
     public void updateBizTags(String namespaceId, String promptKey, String bizTags) throws NacosException {
         promptHandler.updateBizTags(namespaceId, promptKey, bizTags);
     }

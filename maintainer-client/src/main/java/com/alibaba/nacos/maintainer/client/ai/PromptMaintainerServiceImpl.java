@@ -262,6 +262,19 @@ final class PromptMaintainerServiceImpl extends AbstractAiDelegateMaintainerServ
     }
     
     @Override
+    public void updateDescription(String namespaceId, String promptKey, String description) throws NacosException {
+        namespaceId = resolveNamespace(namespaceId);
+        Map<String, String> params = new HashMap<>(8);
+        params.put("namespaceId", namespaceId);
+        params.put("promptKey", promptKey);
+        params.put("description", description);
+        HttpRequest httpRequest = buildHttpRequestBuilder(buildRequestResource(namespaceId, promptKey))
+                .setHttpMethod(HttpMethod.PUT).setPath(Constants.AdminApiPath.AI_PROMPT_DESCRIPTION_ADMIN_PATH)
+                .setParamValue(params).build();
+        executeSyncHttpRequest(httpRequest);
+    }
+    
+    @Override
     public void updateBizTags(String namespaceId, String promptKey, String bizTags) throws NacosException {
         namespaceId = resolveNamespace(namespaceId);
         Map<String, String> params = new HashMap<>(8);
