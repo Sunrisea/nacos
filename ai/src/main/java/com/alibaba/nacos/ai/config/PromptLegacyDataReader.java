@@ -16,25 +16,18 @@
 
 package com.alibaba.nacos.ai.config;
 
-import com.alibaba.nacos.api.ai.model.prompt.PromptDescriptor;
-import com.alibaba.nacos.api.ai.model.prompt.PromptLabelVersionMapping;
-
 import java.util.List;
 
 /**
  * SPI interface for reading legacy prompt data during migration.
  *
  * <p>Different environments (open-source Nacos vs commercial) may store prompt data
- * in different legacy formats. Implementations of this interface provide the ability
- * to scan and read legacy prompt data for migration to the new DB + typed storage
- * architecture.</p>
+ * in different legacy formats. Implementations provide the ability to scan and read
+ * legacy prompt data for migration to the new DB + typed storage architecture.</p>
  *
  * <p>The default implementation ({@code nacos}) reads from Nacos Config
  * ({@code nacos-ai-prompt} group). Commercial implementations can provide their own
  * {@code @Component} bean to override.</p>
- *
- * <p>The active reader is selected by configuration property
- * {@code nacos.ai.prompt.migration.provider} (default: {@code nacos}).</p>
  *
  * @author nacos
  * @since 3.2.0
@@ -42,42 +35,27 @@ import java.util.List;
 public interface PromptLegacyDataReader {
     
     /**
-     * Provider type identifier.
+     * Provider type identifier. Used to select the active reader via configuration
+     * property {@code nacos.ai.prompt.migration.provider}.
      *
      * @return type string, e.g. "nacos"
      */
     String type();
     
     /**
-     * Scan legacy storage and return all prompt keys that have legacy data.
+     * Scan legacy storage and return all prompts with their metadata and version lists.
+     * Version content is NOT included; use {@link #readVersionContent} to load on demand.
      *
-     * @return list of prompt keys found in legacy storage
+     * @return list of legacy prompt data
      */
-    List<String> scanLegacyPromptKeys();
+    List<LegacyPromptData> scanLegacyPrompts();
     
     /**
-     * Read the legacy descriptor for a prompt.
-     *
-     * @param promptKey prompt key
-     * @return descriptor, or null if not found
-     */
-    PromptDescriptor readDescriptor(String promptKey);
-    
-    /**
-     * Read the legacy label/version mapping for a prompt.
-     *
-     * @param promptKey prompt key
-     * @return mapping, or null if not found
-     */
-    PromptLabelVersionMapping readLabelVersionMapping(String promptKey);
-    
-    /**
-     * Read the legacy version content for a specific prompt version.
+     * Read the content of a specific prompt version from legacy storage.
      *
      * @param promptKey prompt key
      * @param version   version string
-     * @param mapping   the label/version mapping (for fallback resolution)
      * @return version content as JSON string, or null if not found
      */
-    String readVersionContent(String promptKey, String version, PromptLabelVersionMapping mapping);
+    String readVersionContent(String promptKey, String version);
 }
