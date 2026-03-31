@@ -24,8 +24,12 @@ import com.alibaba.nacos.ai.form.prompt.PromptDraftUpdateForm;
 import com.alibaba.nacos.ai.form.prompt.PromptForm;
 import com.alibaba.nacos.ai.form.prompt.PromptHistoryForm;
 import com.alibaba.nacos.ai.form.prompt.PromptLabelsUpdateForm;
+import com.alibaba.nacos.ai.form.prompt.PromptLabelBindForm;
+import com.alibaba.nacos.ai.form.prompt.PromptLabelForm;
 import com.alibaba.nacos.ai.form.prompt.PromptListForm;
+import com.alibaba.nacos.ai.form.prompt.PromptMetadataForm;
 import com.alibaba.nacos.ai.form.prompt.PromptOnlineForm;
+import com.alibaba.nacos.ai.form.prompt.PromptPublishForm;
 import com.alibaba.nacos.ai.form.prompt.PromptQueryForm;
 import com.alibaba.nacos.ai.form.prompt.PromptSubmitForm;
 import com.alibaba.nacos.ai.form.prompt.PromptVersionPublishForm;
@@ -48,6 +52,7 @@ import com.alibaba.nacos.core.paramcheck.ExtractorManager;
 import com.alibaba.nacos.plugin.auth.constant.ActionTypes;
 import com.alibaba.nacos.plugin.auth.constant.SignType;
 import com.fasterxml.jackson.core.type.TypeReference;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -55,6 +60,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -275,5 +281,115 @@ public class PromptAdminController {
         }
         return JacksonUtils.toObj(variables, new TypeReference<List<PromptVariable>>() {
         });
+    }
+    
+    private List<String> parseBizTags(String bizTags) {
+        if (bizTags == null) {
+            return null;
+        }
+        if (bizTags.trim().isEmpty()) {
+            return new ArrayList<>(0);
+        }
+        String[] split = bizTags.split(",");
+        List<String> result = new ArrayList<>(split.length);
+        for (String each : split) {
+            if (each != null && !each.trim().isEmpty()) {
+                result.add(each.trim());
+            }
+        }
+        return result;
+    }
+    
+    // ========== Legacy compatibility endpoints (deprecated) ==========
+    
+    /**
+     * Legacy one-shot publish a new version of prompt.
+     *
+     * @deprecated Use POST /draft + POST /submit instead.
+     */
+    @Deprecated
+    @PostMapping
+    @Secured(action = ActionTypes.WRITE, signType = SignType.AI, apiType = ApiType.ADMIN_API)
+    public Result<Boolean> publishPrompt(PromptPublishForm form, HttpServletRequest request) throws NacosException {
+        form.validate();
+        boolean success = promptOperationService.publishPromptVersion(form.getNamespaceId(), form.getPromptKey(),
+                form.getVersion(), form.getTemplate(), form.getCommitMsg(), form.getDescription(),
+                parseBizTags(form.getBizTags()), parseVariables(form.getVariables()));
+        return Result.success(success);
+    }
+    
+    /**
+     * Legacy get prompt metadata.
+     *
+     * @deprecated Use GET /governance instead.
+     */
+    @Deprecated
+    @GetMapping("/metadata")
+    @Secured(action = ActionTypes.READ, signType = SignType.AI, apiType = ApiType.ADMIN_API)
+    public Result<PromptMetaInfo> getPromptMetadata(PromptForm form) throws NacosException {
+        form.validate();
+        PromptMetaInfo detail = promptOperationService.getPromptMeta(form.getNamespaceId(), form.getPromptKey());
+        return Result.success(detail);
+    }
+    
+    /**
+     * Legacy get prompt detail by version/label/latest.
+     *
+     * @deprecated Use GET /version instead.
+     */
+    @Deprecated
+    @GetMapping("/detail")
+    @Secured(action = ActionTypes.READ, signType = SignType.AI, apiType = ApiType.ADMIN_API)
+    public Result<PromptVersionInfo> queryPromptDetail(PromptQueryForm form) throws NacosException {
+        form.validate();
+        PromptVersionInfo detail = promptOperationService.queryPromptDetail(form.getNamespaceId(),
+                form.getPromptKey(), form.getVersion(), form.getLabel());
+        return Result.success(detail);
+    }
+    
+    /**
+     * Legacy bind label to a specified prompt version.
+     *
+     * @deprecated Use PUT /labels instead.
+     */
+    @Deprecated
+    @PutMapping("/label")
+    @Secured(action = ActionTypes.WRITE, signType = SignType.AI, apiType = ApiType.ADMIN_API)
+    public Result<Boolean> bindLabel(PromptLabelBindForm form, HttpServletRequest request) throws NacosException {
+        form.validate();
+        boolean success = promptOperationService.bindLabel(form.getNamespaceId(), form.getPromptKey(),
+                form.getLabel(), form.getVersion());
+        return Result.success(success);
+    }
+    
+    /**
+     * Legacy unbind label from prompt.
+     *
+     * @deprecated Use PUT /labels instead.
+     */
+    @Deprecated
+    @DeleteMapping("/label")
+    @Secured(action = ActionTypes.WRITE, signType = SignType.AI, apiType = ApiType.ADMIN_API)
+    public Result<Boolean> unbindLabel(PromptLabelForm form, HttpServletRequest request) throws NacosException {
+        form.validate();
+        boolean success = promptOperationService.unbindLabel(form.getNamespaceId(), form.getPromptKey(),
+                form.getLabel());
+        return Result.success(success);
+    }
+    
+    /**
+     * Legacy update prompt metadata (description and bizTags).
+     *
+     * @deprecated Use PUT /description and PUT /biz-tags instead.
+     */
+    @Deprecated
+    @PutMapping("/metadata")
+    @Secured(action = ActionTypes.WRITE, signType = SignType.AI, apiType = ApiType.ADMIN_API)
+    public Result<Boolean> updatePromptMetadata(PromptMetadataForm form, HttpServletRequest request)
+            throws NacosException {
+        form.validate();
+        boolean success = promptOperationService.updatePromptMetadata(form.getNamespaceId(), form.getPromptKey(),
+                form.getDescription(), parseBizTags(form.getBizTags()));
+        return Result.success(success);
     }
 }
